@@ -1,0 +1,18 @@
+[install]
+# Configure Bun package installation
+cache = true
+exact = false
+production = false
+optional = true
+
+[install.scopes]
+# Configure scoped packages if needed
+
+[run]
+# Configure script running
+bun = true
+shell = "bash"
+
+[test]
+# Configure testing (if you add tests later)
+preload = []
