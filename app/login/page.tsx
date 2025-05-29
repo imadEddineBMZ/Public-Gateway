@@ -1,24 +1,33 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
+import { login as apiLogin } from "@/services/api-service" // Rename import to avoid conflict
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { motion } from "framer-motion"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  // Use setUser from auth context instead of the login method
+  const { setUser } = useAuth()
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [isBrowser, setIsBrowser] = useState(false)
+  
+  // Check if we're in the browser environment
+  useEffect(() => {
+    setIsBrowser(true)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,9 +35,47 @@ export default function LoginPage() {
     setError("")
 
     try {
-      await login(email, password)
+      console.log("Attempting to log in with:", { email, password });
+      // Use the API login function
+      const { token } = await apiLogin(email, password)
+
+      // Create a user object with the token
+      const user = {
+        id: "1", // You might get this from the token payload
+        name: email.split("@")[0], // Temporary name from email
+        email,
+        token, // Store the token
+        bloodType: "Unknown",
+        wilaya: "Unknown",
+        lastDonation: null,
+        eligibleDate: null,
+        badges: [],
+        points: 0,
+        notificationPreferences: {
+          enableNotifications: true,
+          subscribedHospitals: [],
+          emailNotifications: true,
+          smsNotifications: false,
+        },
+        privacySettings: {
+          isAnonymous: false,
+          showOnPublicList: true,
+        },
+      }
+
+      // Update the user in context
+      setUser(user)
+
+      // Store in localStorage only on client side
+      if (isBrowser) {
+        localStorage.setItem("user", JSON.stringify(user))
+      }
+
+      // Redirect to dashboard
+      router.push("/dashboard")
     } catch (err) {
       setError("Identifiants invalides. Veuillez réessayer.")
+      console.error("Login error:", err)
     } finally {
       setIsLoading(false)
     }

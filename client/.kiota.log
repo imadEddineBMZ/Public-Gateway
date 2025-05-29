@@ -1,0 +1,22 @@
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1subscriptions~1{subscriptionId}/delete/parameters/0/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1Pledges~1{pledgeId}/put/parameters/0/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1users/get/parameters/1/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1user/get/parameters/0/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1BTC~1subscribed/get/parameters/1/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1BTC/get/parameters/1/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1BloodDonationRequests/get/parameters/1/schema - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodTansfusionCenterDTO/properties/id - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DonorBloodTransferCenterSubscriptionsDTO/properties/id - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DonorBloodTransferCenterSubscriptionsDTO/properties/bloodTansfusionCenterId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DonorBloodTransferCenterSubscriptionsDTO/properties/applicationUserId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/ApplicationUserDTO/properties/donorCorrelationId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationRequestDTO/properties/id - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationRequestDTO/properties/bloodTansfusionCenterId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/CreateSubscriptionRequest/properties/bloodTansfusionCenterId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationPledgeDTO/properties/id - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationPledgeDTO/properties/bloodDonationRequestId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationPledgeDTO/properties/applicationUserId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/CreatePledgeRequest/properties/bloodDonationRequestId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/RegisterUserDto/allOf/1/properties/email - The format email is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BTCSubscribedSpecificationFilter/properties/applicationUserId - The format guid is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/BloodDonationRequestSpecificationFilter/properties/userSubscribedCenters/items - The format guid is not supported by Kiota for the type String and the string type will be used.

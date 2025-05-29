@@ -16,6 +16,12 @@ const nextConfig = {
       }
     }
     
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
+      '.mjs': ['.mts', '.mjs'],
+      '.cjs': ['.cts', '.cjs']
+    };
+    
     return config
   },
   // Image optimization
@@ -36,6 +42,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Enable transpilation for the client directory
+  transpilePackages: ['@microsoft/kiota-abstractions', '@microsoft/kiota-http-fetchlibrary'],
 }
 
 export default nextConfig

@@ -10,11 +10,11 @@ type User = {
   id: string
   name: string
   email: string
-  bloodType: string
+  bloodType: string,
+  token?: string // Optional token for authenticated requests
   wilaya: string
   lastDonation: string | null
   eligibleDate: string | null
-  badges: string[]
   points: number
   notificationPreferences: {
     enableNotifications: boolean
@@ -39,6 +39,7 @@ type AuthContextType = {
   updatePrivacySettings: (settings: User["privacySettings"]) => void
   subscribeToHospital: (hospitalId: string) => void
   unsubscribeFromHospital: (hospitalId: string) => void
+  setUser: (user: User) => void // Add this
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -225,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updatePrivacySettings,
         subscribeToHospital,
         unsubscribeFromHospital,
+        setUser, // Add this
       }}
     >
       {children}

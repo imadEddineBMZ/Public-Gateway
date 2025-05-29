@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,9 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, MapPin, Heart, Award, Phone, Mail, UserPlus } from "lucide-react"
+import { Search, MapPin, Heart, Award, Phone, Mail, UserPlus, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/components/auth-provider"
+import { useToast } from "@/components/ui/use-toast"
+import { 
+  getPublicNonAnonymousDonors,
+  getAllNonAnonymousDonors,
+  getWilayas 
+} from "@/services/api-service"
 
 // Types pour les donneurs
 type Donor = {
@@ -35,130 +41,94 @@ type Donor = {
 
 export default function DonorsPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [bloodTypeFilter, setBloodTypeFilter] = useState<string>("all")
   const [wilayaFilter, setWilayaFilter] = useState<string>("all")
+  const [donors, setDonors] = useState<Donor[]>([])
+  const [wilayas, setWilayas] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Données simulées pour les donneurs
-  const allDonors: Donor[] = [
-    {
-      id: "donor-001",
-      name: "Ahmed Benali",
-      bloodType: "O+",
-      wilaya: "Alger",
-      lastDonation: "2024-03-15",
-      totalDonations: 8,
-      isEligible: true,
-      badges: ["Premier Sauvetage", "Donneur Régulier"],
-      avatar: "/placeholder.svg?height=40&width=40",
-      contactInfo: {
-        email: "ahmed.benali@email.dz",
-        phone: "0555 12 34 56",
-      },
-      privacySettings: {
-        isAnonymous: false,
-        showOnPublicList: true,
-      },
-    },
-    {
-      id: "donor-002",
-      name: "Fatima Khelifi",
-      bloodType: "A+",
-      wilaya: "Oran",
-      lastDonation: "2024-04-20",
-      totalDonations: 12,
-      isEligible: false,
-      badges: ["Premier Sauvetage", "Donneur Régulier", "Sauveur de Vies"],
-      contactInfo: {
-        email: "fatima.khelifi@email.dz",
-        phone: "0666 78 90 12",
-      },
-      privacySettings: {
-        isAnonymous: true,
-        showOnPublicList: true,
-      },
-    },
-    {
-      id: "donor-003",
-      name: "Mohamed Saidi",
-      bloodType: "B-",
-      wilaya: "Constantine",
-      lastDonation: "2024-01-10",
-      totalDonations: 5,
-      isEligible: true,
-      badges: ["Premier Sauvetage", "Donneur Régulier"],
-      contactInfo: {
-        email: "mohamed.saidi@email.dz",
-        phone: "0777 34 56 78",
-      },
-      privacySettings: {
-        isAnonymous: false,
-        showOnPublicList: true,
-      },
-    },
-    {
-      id: "donor-004",
-      name: "Amina Boudjema",
-      bloodType: "AB+",
-      wilaya: "Alger",
-      lastDonation: "2024-02-28",
-      totalDonations: 15,
-      isEligible: true,
-      badges: ["Premier Sauvetage", "Donneur Régulier", "Sauveur de Vies", "Héros du Sang"],
-      contactInfo: {
-        email: "amina.boudjema@email.dz",
-        phone: "0555 90 12 34",
-      },
-      privacySettings: {
-        isAnonymous: false,
-        showOnPublicList: false, // This donor won't appear for non-users
-      },
-    },
-    {
-      id: "donor-005",
-      name: "Karim Meziane",
-      bloodType: "O-",
-      wilaya: "Sétif",
-      lastDonation: "2024-05-01",
-      totalDonations: 3,
-      isEligible: false,
-      badges: ["Premier Sauvetage"],
-      contactInfo: {
-        email: "karim.meziane@email.dz",
-        phone: "0666 56 78 90",
-      },
-      privacySettings: {
-        isAnonymous: false,
-        showOnPublicList: true,
-      },
-    },
-    {
-      id: "donor-006",
-      name: "Nadia Hamidi",
-      bloodType: "A-",
-      wilaya: "Tlemcen",
-      lastDonation: null,
-      totalDonations: 0,
-      isEligible: true,
-      badges: [],
-      contactInfo: {
-        email: "nadia.hamidi@email.dz",
-        phone: "0777 12 34 56",
-      },
-      privacySettings: {
-        isAnonymous: true,
-        showOnPublicList: true,
-      },
-    },
-  ]
-
-  // Filter donors based on privacy settings and user authentication
-  const donors = user
-    ? allDonors // Authenticated users see all donors
-    : allDonors.filter((donor) => donor.privacySettings.showOnPublicList) // Non-authenticated users only see public donors
-
-  const wilayas = ["Alger", "Oran", "Constantine", "Sétif", "Tlemcen", "Annaba", "Blida", "Batna"]
   const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+
+  // Fetch data when component mounts
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true)
+      try {
+        // Fetch donors based on authentication status
+        const donorsData = user?.token
+          ? await getAllNonAnonymousDonors(user.token, 2)
+          : await getPublicNonAnonymousDonors(1)
+        
+        console.log("API donors response:", donorsData);
+        
+        // Map API data to our Donor format
+        if (donorsData && Array.isArray(donorsData)) {
+          const mappedDonors: Donor[] = donorsData.map(donor => ({
+            id: donor.id || "",
+            name: donor.firstName && donor.lastName 
+              ? `${donor.firstName} ${donor.lastName}`
+              : donor.username || "Donneur anonyme",
+            bloodType: donor.donorBloodGroup || "?",
+            wilaya: donor.wilaya?.name || "Non spécifiée",
+            lastDonation: donor.lastDonatedAt || null,
+            totalDonations: donor.donorDonationCount || 0,
+            isEligible: donor.donorCanDonateNow || false,
+            badges: getBadges(donor.donorDonationCount || 0),
+            avatar: donor.profilePictureUrl || undefined,
+            contactInfo: {
+              email: donor.email || "",
+              phone: donor.phoneNumber || "",
+            },
+            privacySettings: {
+              isAnonymous: donor.donorWantToStayAnonymous || false,
+              showOnPublicList: !donor.donorExcludedFromPublicPortal,
+            },
+          }))
+          
+          setDonors(mappedDonors)
+        } else {
+          console.error("Unexpected data format:", donorsData)
+          toast({
+            title: "Erreur de format",
+            description: "Les données reçues ne sont pas dans le format attendu.",
+            variant: "destructive",
+          })
+        }
+        
+        // Fetch wilayas for filtering
+        const wilayasData = await getWilayas()
+        if (wilayasData && Array.isArray(wilayasData)) {
+          const wilayaNames = wilayasData.map(w => w.name || "").filter(Boolean)
+          setWilayas(wilayaNames)
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        toast({
+          title: "Erreur de connexion",
+          description: "Impossible de charger les donneurs. Veuillez réessayer plus tard.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchData()
+  }, [toast, user])
+  
+  // Helper function to generate badges based on donation count
+  function getBadges(donationCount: number): string[] {
+    const badges = []
+    
+    if (donationCount >= 1) badges.push("Premier Sauvetage")
+    if (donationCount >= 5) badges.push("Donneur Régulier")
+    if (donationCount >= 10) badges.push("Sauveur de Vies")
+    if (donationCount >= 15) badges.push("Héros du Sang")
+    
+    return badges
+  }
 
   // Filtrer les donneurs
   const filteredDonors = donors.filter((donor) => {
@@ -300,142 +270,152 @@ export default function DonorsPage() {
             </CardContent>
           </Card>
 
-          {/* Liste des donneurs */}
-          {filteredDonors.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border">
-              <p className="text-gray-500">Aucun donneur ne correspond à vos critères de recherche.</p>
+          {/* Loading state */}
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-12 w-12 text-hero-red animate-spin" />
+              <span className="ml-2 text-lg">Chargement des donneurs...</span>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredDonors.map((donor, index) => (
-                <motion.div
-                  key={donor.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  <Card className="hover:shadow-lg transition-shadow duration-300">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={donor.avatar || "/placeholder.svg"} alt={getDisplayName(donor)} />
-                          <AvatarFallback className="bg-gradient-to-br from-hero-red to-red-600 text-white">
-                            {getInitials(donor)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <h3 className="font-semibold">{getDisplayName(donor)}</h3>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <MapPin className="h-3.5 w-3.5" />
-                            <span>{donor.wilaya}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-hero-red font-semibold">
-                            {donor.bloodType}
-                          </div>
-                          <Badge variant={donor.isEligible ? "default" : "secondary"} className="text-xs">
-                            {donor.isEligible ? "Éligible" : "Non éligible"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500">Dons totaux:</span>
-                          <p className="font-semibold">{donor.totalDonations}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Dernier don:</span>
-                          <p className="font-semibold">
-                            {donor.lastDonation ? new Date(donor.lastDonation).toLocaleDateString("fr-FR") : "Aucun"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Contact Information - Enhanced visibility for authenticated users */}
-                      <div className="space-y-2 pt-2 border-t border-gray-100">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail className="h-3.5 w-3.5" />
-                          <span className="truncate">
-                            {user
-                              ? donor.contactInfo.email
-                              : donor.contactInfo.email.replace(/(.{2}).*(@.*)/, "$1***$2")}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="h-3.5 w-3.5" />
-                          <span>
-                            {user
-                              ? donor.contactInfo.phone
-                              : donor.contactInfo.phone.replace(/(.{4}).*(.{2})/, "$1***$2")}
-                          </span>
-                        </div>
-                        {!user && (
-                          <p className="text-xs text-gray-500 italic">
-                            Connectez-vous pour voir les informations complètes
-                          </p>
-                        )}
-                      </div>
-
-                      {donor.badges.length > 0 && (
-                        <div>
-                          <span className="text-sm text-gray-500 mb-2 block">Badges:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {donor.badges.slice(0, 2).map((badge, badgeIndex) => (
-                              <Badge
-                                key={badgeIndex}
-                                variant="outline"
-                                className="text-xs bg-gold-badge/20 text-trust-blue border-gold-badge/30"
-                              >
-                                <Award className="h-3 w-3 mr-1" />
-                                {badge}
+            <>
+              {/* Liste des donneurs */}
+              {filteredDonors.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-lg border">
+                  <p className="text-gray-500">Aucun donneur ne correspond à vos critères de recherche.</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredDonors.map((donor, index) => (
+                    <motion.div
+                      key={donor.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      <Card className="hover:shadow-lg transition-shadow duration-300">
+                        <CardHeader className="pb-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-12 w-12">
+                              <AvatarImage src={donor.avatar || "/placeholder.svg"} alt={getDisplayName(donor)} />
+                              <AvatarFallback className="bg-gradient-to-br from-hero-red to-red-600 text-white">
+                                {getInitials(donor)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <h3 className="font-semibold">{getDisplayName(donor)}</h3>
+                              <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <MapPin className="h-3.5 w-3.5" />
+                                <span>{donor.wilaya}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-hero-red font-semibold">
+                                {donor.bloodType}
+                              </div>
+                              <Badge variant={donor.isEligible ? "default" : "secondary"} className="text-xs">
+                                {donor.isEligible ? "Éligible" : "Non éligible"}
                               </Badge>
-                            ))}
-                            {donor.badges.length > 2 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{donor.badges.length - 2}
-                              </Badge>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">Dons totaux:</span>
+                              <p className="font-semibold">{donor.totalDonations}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Dernier don:</span>
+                              <p className="font-semibold">
+                                {donor.lastDonation ? new Date(donor.lastDonation).toLocaleDateString("fr-FR") : "Aucun"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Contact Information - Enhanced visibility for authenticated users */}
+                          <div className="space-y-2 pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="h-3.5 w-3.5" />
+                              <span className="truncate">
+                                {user
+                                  ? donor.contactInfo.email
+                                  : donor.contactInfo.email.replace(/(.{2}).*(@.*)/, "$1***$2")}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Phone className="h-3.5 w-3.5" />
+                              <span>
+                                {user
+                                  ? donor.contactInfo.phone
+                                  : donor.contactInfo.phone.replace(/(.{4}).*(.{2})/, "$1***$2")}
+                              </span>
+                            </div>
+                            {!user && (
+                              <p className="text-xs text-gray-500 italic">
+                                Connectez-vous pour voir les informations complètes
+                              </p>
                             )}
                           </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
 
-          {/* Statistiques */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Statistiques des donneurs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-hero-red">{donors.length}</div>
-                  <div className="text-sm text-gray-600">Donneurs {user ? "inscrits" : "publics"}</div>
+                          {donor.badges.length > 0 && (
+                            <div>
+                              <span className="text-sm text-gray-500 mb-2 block">Badges:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {donor.badges.slice(0, 2).map((badge, badgeIndex) => (
+                                  <Badge
+                                    key={badgeIndex}
+                                    variant="outline"
+                                    className="text-xs bg-gold-badge/20 text-trust-blue border-gold-badge/30"
+                                  >
+                                    <Award className="h-3 w-3 mr-1" />
+                                    {badge}
+                                  </Badge>
+                                ))}
+                                {donor.badges.length > 2 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{donor.badges.length - 2}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-life-green">{donors.filter((d) => d.isEligible).length}</div>
-                  <div className="text-sm text-gray-600">Donneurs éligibles</div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-trust-blue">
-                    {donors.reduce((sum, d) => sum + d.totalDonations, 0)}
+              )}
+
+              {/* Statistiques */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Statistiques des donneurs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <div className="text-2xl font-bold text-hero-red">{donors.length}</div>
+                      <div className="text-sm text-gray-600">Donneurs {user ? "inscrits" : "publics"}</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-life-green">{donors.filter((d) => d.isEligible).length}</div>
+                      <div className="text-sm text-gray-600">Donneurs éligibles</div>
+                    </div>
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-trust-blue">
+                        {donors.reduce((sum, d) => sum + d.totalDonations, 0)}
+                      </div>
+                      <div className="text-sm text-gray-600">Dons totaux</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-hope-purple">{new Set(donors.map((d) => d.wilaya)).size}</div>
+                      <div className="text-sm text-gray-600">Wilayas couvertes</div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600">Dons totaux</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-hope-purple">{new Set(donors.map((d) => d.wilaya)).size}</div>
-                  <div className="text-sm text-gray-600">Wilayas couvertes</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </motion.div>
       </main>
     </div>
