@@ -1,32 +1,20 @@
-"use client"
-
-import type React from "react"
-import { Inter } from "next/font/google"
+import ClientLayout from "@/components/client-layout"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/components/auth-provider"
-import { MainNavigation } from "@/components/main-nav"
 
-const inter = Inter({ subsets: ["latin"] })
+export const metadata = {
+  title: "DonorConnect | Plateforme de don de sang",
+  description: "Connecter les donneurs de sang aux hôpitaux qui en ont besoin",
+}
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html lang="fr" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light">
-          <AuthProvider>
-            <div className="flex flex-col min-h-screen">
-              <MainNavigation />
-              {children}
-            </div>
-            <Toaster />
-          </AuthProvider>
-        </ThemeProvider>
+    <html lang="fr">
+      <body className="min-h-screen bg-white font-sans antialiased">
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )
