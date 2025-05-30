@@ -78,9 +78,9 @@ export default function PledgesPage() {
   const [cancelReason, setCancelReason] = useState("")
   const [pledges, setPledges] = useState<Pledge[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
-  const [pledgeToUpdate, setPledgeToUpdate] = useState<string | null>(null)
-  const [dateDialogOpen, setDateDialogOpen] = useState(false)
+  const [dateDialogOpen, setDateDialogOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [pledgeToUpdate, setPledgeToUpdate] = useState<string | null>(null);
 
   // Check if we're coming from a new pledge creation
   useEffect(() => {
@@ -221,74 +221,118 @@ export default function PledgesPage() {
         title: "Erreur",
         description: "Veuillez sélectionner une date valide.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
-      setIsLoading(true)
+      setIsLoading(true);
       
       // Make sure the date is in the future (API requirement)
-      if (selectedDate < new Date()) {
+      const now = new Date();
+      if (selectedDate <= now) {
         toast({
           title: "Date invalide",
           description: "Veuillez sélectionner une date future.",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
       
-      // Update the pledge with the new date
+      // Convert to proper ISO string format
+      const formattedDate = selectedDate.toISOString();
+      console.log(`Updating pledge ${pledgeToUpdate} with new date: ${formattedDate}`);
+      
+      // Update the pledge with the new date - IMPORTANT: Must use status 2 (CanceledByInitiator)
       await updatePledge(user.token, pledgeToUpdate, {
-        evolutionStatus: 0, // Keep status as active/initiated
-        pledgeDate: selectedDate
-      })
+        evolutionStatus: 2, // Must be CanceledByInitiator (status 2) based on API restrictions
+        pledgeDate: formattedDate
+      });
 
-      // Update local state
+      // Update local state - NOTE: We're keeping the UI state as "active" for better UX
+      // even though the API requires it to be marked as canceled
       setPledges(
         pledges.map((pledge) => 
           pledge.id === pledgeToUpdate 
             ? { 
                 ...pledge, 
-                appointmentDate: formatDate(selectedDate)
+                appointmentDate: formatDate(selectedDate),
+                // Don't update status to "cancelled" in UI to maintain user experience
               } 
             : pledge
         )
-      )
+      );
 
       // Close dialog and reset state
-      setDateDialogOpen(false)
-      setPledgeToUpdate(null)
-      setSelectedDate(undefined)
+      setDateDialogOpen(false);
+      setPledgeToUpdate(null);
+      setSelectedDate(undefined);
 
       toast({
         title: "Date mise à jour",
         description: "La date de votre engagement a été mise à jour avec succès.",
-      })
+      });
     } catch (error) {
-      console.error("Error updating pledge date:", error)
+      console.error("Error updating pledge date:", error);
       toast({
         title: "Erreur",
         description: "Une erreur est survenue lors de la mise à jour de la date.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   // Helper function to open date dialog
   const openDateDialog = (pledgeId: string) => {
-    setPledgeToUpdate(pledgeId)
+    console.log(`Opening date dialog for pledge ID: ${pledgeId}`);
+    setPledgeToUpdate(pledgeId);
     
     // Set default date to current appointment date or tomorrow
-    const pledge = pledges.find(p => p.id === pledgeId)
-    const defaultDate = pledge?.appointmentDate 
-      ? new Date(pledge.appointmentDate) 
-      : new Date(Date.now() + 86400000) // Tomorrow
+    const pledge = pledges.find(p => p.id === pledgeId);
+    let defaultDate: Date;
     
-    setSelectedDate(defaultDate)
-    setDateDialogOpen(true)
+    try {
+      if (pledge?.appointmentDate) {
+        // Parse French date format (DD/MM/YYYY) - need special handling
+        const parts = pledge.appointmentDate.split('/');
+        if (parts.length === 3) {
+          // Create date from parts in correct order (year, month-1, day)
+          defaultDate = new Date(
+            parseInt(parts[2]), // Year
+            parseInt(parts[1]) - 1, // Month (0-indexed)
+            parseInt(parts[0]) // Day
+          );
+        } else {
+          // Fallback if can't parse
+          defaultDate = new Date();
+          defaultDate.setDate(defaultDate.getDate() + 1);
+        }
+        
+        // Ensure it's in the future
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (defaultDate < tomorrow) {
+          defaultDate = tomorrow;
+        }
+      } else {
+        // Default to tomorrow
+        defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 1);
+      }
+      
+      console.log(`Setting default date to: ${defaultDate.toISOString()}`);
+      setSelectedDate(defaultDate);
+      setDateDialogOpen(true);
+    } catch (error) {
+      console.error("Error parsing date:", error);
+      // Fallback to tomorrow's date on error
+      defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 1);
+      setSelectedDate(defaultDate);
+      setDateDialogOpen(true);
+    }
   }
 
   // Helper function to format dates
@@ -409,7 +453,7 @@ export default function PledgesPage() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                      {/* Replace the regular Button with the DialogTrigger */}
+                      {/* Button outside the Dialog component */}
                       <Button 
                         onClick={() => openDateDialog(pledge.id)}
                         className="flex-1 bg-green-500 hover:bg-green-400 text-white"

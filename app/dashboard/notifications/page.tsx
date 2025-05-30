@@ -22,8 +22,37 @@ import { Bell, BellOff, Mail, MessageSquare, Hospital, Search, Shield, Save, Tra
 import { motion } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
 
-// Simple Switch component
-const Switch = ({ checked, onCheckedChange, ...props }) => (
+// Define types for the hospital
+interface Hospital {
+  id: string;
+  name: string;
+  type: string;
+  wilaya: string;
+  urgency: "high" | "medium" | "low";
+}
+
+// Define types for notification settings
+interface NotificationSettings {
+  enableNotifications: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  subscribedHospitals: string[];
+}
+
+// Define types for privacy settings
+interface PrivacySettings {
+  showOnPublicList: boolean;
+  isAnonymous: boolean;
+}
+
+// Simple Switch component with TypeScript props
+interface SwitchProps {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  [key: string]: any; // For any additional props
+}
+
+const Switch: React.FC<SwitchProps> = ({ checked, onCheckedChange, ...props }) => (
   <button
     type="button"
     role="switch"
@@ -43,7 +72,7 @@ const Switch = ({ checked, onCheckedChange, ...props }) => (
 )
 
 // All hospitals data
-const allHospitals = {
+const allHospitals: Record<string, Hospital> = {
   h1: { id: "h1", name: "CHU Mustapha Pacha", type: "CHU", wilaya: "Alger", urgency: "high" },
   h2: { id: "h2", name: "Hôpital El Kettar", type: "Hôpital spécialisé", wilaya: "Alger", urgency: "medium" },
   h3: { id: "h3", name: "Clinique Ibn Sina", type: "Clinique privée", wilaya: "Alger", urgency: "low" },
@@ -82,24 +111,27 @@ const allHospitals = {
   h18: { id: "h18", name: "Hôpital El Hidhab", type: "Hôpital public", wilaya: "Setif", urgency: "medium" },
   h19: { id: "h19", name: "CHU de Tlemcen", type: "CHU", wilaya: "Tlemcen", urgency: "high" },
   h20: { id: "h20", name: "Hôpital Dr Tidjani Damerdji", type: "Hôpital public", wilaya: "Tlemcen", urgency: "medium" },
-}
+};
 
 export default function NotificationsPage() {
   const { user, updateNotificationPreferences, updatePrivacySettings, unsubscribeFromHospital } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [hospitalToUnsubscribe, setHospitalToUnsubscribe] = useState(null)
-  const [notificationSettings, setNotificationSettings] = useState({
+  const [hospitalToUnsubscribe, setHospitalToUnsubscribe] = useState<Hospital | null>(null)
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     enableNotifications: false,
     emailNotifications: false,
     smsNotifications: false,
     subscribedHospitals: [],
   })
-  const [privacySettings, setPrivacySettings] = useState({ showOnPublicList: false, isAnonymous: false })
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>({ 
+    showOnPublicList: false, 
+    isAnonymous: false 
+  })
 
   useEffect(() => {
-    if (user) {
+    if (user && user.notificationPreferences && user.privacySettings) {
       setNotificationSettings(user.notificationPreferences)
       setPrivacySettings(user.privacySettings)
     }
@@ -108,7 +140,9 @@ export default function NotificationsPage() {
   if (!user) return null
 
   // Get subscribed hospitals
-  const subscribedHospitals = notificationSettings.subscribedHospitals.map((id) => allHospitals[id]).filter(Boolean)
+  const subscribedHospitals = notificationSettings.subscribedHospitals
+    .map((id) => allHospitals[id])
+    .filter(Boolean) as Hospital[]
 
   // Filter hospitals based on search term
   const filteredHospitals = subscribedHospitals.filter(

@@ -224,14 +224,31 @@ export async function updatePledge(
     // Clean the token properly
     const cleanToken = token.startsWith('Bearer ') ? token.substring(7) : token;
     
-    // Create date 1 day in the future to satisfy API requirements
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 1); // Add 1 day to current date
+    // Get the pledgeDate from updateData or create future date if not provided
+    let pledgeDate: Date;
+    if (updateData.pledgeDate) {
+      // Convert string date to Date if needed
+      pledgeDate = typeof updateData.pledgeDate === 'string' 
+        ? new Date(updateData.pledgeDate) 
+        : updateData.pledgeDate;
+      
+      // Ensure date is in the future
+      const now = new Date();
+      if (pledgeDate <= now) {
+        // If provided date is not in future, add one day to current date
+        pledgeDate = new Date();
+        pledgeDate.setDate(pledgeDate.getDate() + 1);
+      }
+    } else {
+      // Default to tomorrow if no date provided
+      pledgeDate = new Date();
+      pledgeDate.setDate(pledgeDate.getDate() + 1);
+    }
     
     // IMPORTANT: Only include the exact fields allowed by the API schema
     const requestData = {
       evolutionStatus: updateData.evolutionStatus || 0,
-      pledgeDate: futureDate.toISOString() // Always use a future date
+      pledgeDate: pledgeDate.toISOString()
     };
     
     const url = `https://localhost:57679/Pledges/${pledgeId}`;

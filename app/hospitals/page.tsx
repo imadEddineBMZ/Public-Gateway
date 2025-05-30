@@ -28,7 +28,7 @@ import {
   PaginationNext, 
   PaginationPrevious 
 } from "@/components/ui/pagination"
-
+import {getBloodTansfusionCentersDirectAuthenticated} from "@/services/api/bloodDonation/blood-transfusion-service"
 // Types pour les hôpitaux
 type Hospital = {
   id: string
@@ -43,6 +43,7 @@ type Hospital = {
   totalRequests: number
   bloodBankCapacity: number
   specialties: string[]
+  loggedUserSubscribed?: boolean  // Add this property
 }
 
 export default function HospitalsPage() {
@@ -53,7 +54,7 @@ export default function HospitalsPage() {
   const [hospitals, setHospitals] = useState<Hospital[]>([])
   const [wilayas, setWilayas] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [subscribedCenters, setSubscribedCenters] = useState<string[]>([])
+  const [subscribedCenters, setSubscribedCenters] = useState<{id: string, bloodTansfusionCenterId: string}[]>([])
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -66,7 +67,7 @@ export default function HospitalsPage() {
       try {
         console.log("Fetching blood transfusion centers...")
         // Fetch blood transfusion centers
-        const centersData = await getBloodTansfusionCenters()
+        const centersData = await getBloodTansfusionCentersDirectAuthenticated(user?.token as string)
         console.log("API response:", centersData)
 
         if (centersData && Array.isArray(centersData)) {
@@ -79,11 +80,12 @@ export default function HospitalsPage() {
             address: center.address || "",
             phone: center.tel || "",
             email: center.email || "",
-            openHours: "24h/24, 7j/7", // Default value
-            activeRequests: center.bloodDonationRequests?.filter(req => req.evolutionStatus !== 3).length || 0,
+            openHours: "24h/24, 7j/7", 
+            activeRequests: center.bloodDonationRequests?.filter((req: { evolutionStatus: number }) => req.evolutionStatus !== 3).length || 0,
             totalRequests: center.bloodDonationRequests?.length || 0,
-            bloodBankCapacity: 500, // Default value
-            specialties: ["Transfusion sanguine"], // Default value
+            bloodBankCapacity: 500,
+            specialties: ["Transfusion sanguine"],
+            loggedUserSubscribed: center.loggedUserSubscribed || false  // Preserve this property
           }))
           
           setHospitals(mappedHospitals)
@@ -170,54 +172,90 @@ export default function HospitalsPage() {
     }
   }
 
-  const handleSubscription = async (hospitalId: string, isSubscribed: boolean) => {
-    if (!user?.token) {
+  const handleSubscriptionToggle = async (hospitalId: string, currentSubscriptionId: string | null) => {
+    if (!user) {
       toast({
-        title: "Connexion requise",
-        description: "Vous devez être connecté pour vous abonner aux notifications.",
+        title: "Non connecté",
+        description: "Vous devez être connecté pour gérer vos abonnements.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-
+    
+    // Use a scoped loading state instead of the global one
+    const toggleButton = document.getElementById(`subscribe-btn-${hospitalId}`);
+    if (toggleButton) {
+      toggleButton.classList.add("loading"); 
+    }
+    
     try {
-      setIsLoading(true)
-      
-      if (isSubscribed) {
-        // Unsubscribe using API
-        await unsubscribeFromBloodTansfusionCenter(user.token, hospitalId)
-        setSubscribedCenters(prev => prev.filter(id => id !== hospitalId))
-        toast({
-          title: "Désabonnement réussi",
-          description: "Vous ne recevrez plus de notifications de cet hôpital.",
-          className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
-        })
+      if (currentSubscriptionId) {
+        // Unsubscribe logic
+        await unsubscribeFromBloodTansfusionCenter(user.token, currentSubscriptionId);
+        
+        // Update subscribedCenters state
+        setSubscribedCenters(prev => prev.filter(sub => sub.id !== currentSubscriptionId));
+        
+        // IMPORTANT: Also update the hospital's loggedUserSubscribed property
+        setHospitals(prev => 
+          prev.map(h => 
+            h.id === hospitalId 
+              ? { ...h, loggedUserSubscribed: false } 
+              : h
+          )
+        );
       } else {
-        // Subscribe using API
-        await subscribeToBloodTansfusionCenter(user.token, hospitalId)
-        setSubscribedCenters(prev => [...prev, hospitalId])
-        toast({
-          title: "Abonnement réussi",
-          description: "Vous recevrez des notifications pour les demandes de sang de cet hôpital.",
-          className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
-        })
+        // Subscribe logic
+        const result = await subscribeToBloodTansfusionCenter(user.token, hospitalId);
+        
+        // Update subscribedCenters state
+        setSubscribedCenters(prev => [...prev, { 
+          id: result || hospitalId, 
+          bloodTansfusionCenterId: hospitalId 
+        }]);
+        
+        // IMPORTANT: Also update the hospital's loggedUserSubscribed property
+        setHospitals(prev => 
+          prev.map(h => 
+            h.id === hospitalId 
+              ? { ...h, loggedUserSubscribed: true } 
+              : h
+          )
+        );
       }
+      
+      // Show success toast
+      toast({
+        title: currentSubscriptionId ? "Désabonnement réussi" : "Abonnement réussi",
+        description: currentSubscriptionId 
+          ? "Vous ne recevrez plus de notifications de cet hôpital."
+          : "Vous recevrez des notifications pour les demandes de sang de cet hôpital.",
+        className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
+      });
     } catch (error) {
-      console.error("Error with subscription:", error)
+      console.error("Error toggling subscription:", error);
       toast({
         title: "Erreur",
         description: "Une erreur est survenue lors de la modification de l'abonnement.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      // Remove loading state from button only
+      if (toggleButton) {
+        toggleButton.classList.remove("loading");
+      }
     }
-  }
+  };
 
-  const isSubscribed = (hospitalId: string) => {
-    return subscribedCenters.includes(hospitalId) || 
-           false
-  }
+  const isSubscribed = (hospital: any) => {
+    // First check the loggedUserSubscribed property which comes directly from API
+    if (hospital.loggedUserSubscribed === true) {
+      return true;
+    }
+    
+    // Fallback to local state if needed
+    return subscribedCenters.some(sub => sub.bloodTansfusionCenterId === hospital.id);
+  };
 
   // Render pagination controls
   const renderPaginationControls = () => {
@@ -445,23 +483,19 @@ export default function HospitalsPage() {
                             {user && (
                               <div className="pt-3 border-t border-gray-100">
                                 <Button
-                                  variant={isSubscribed(hospital.id) ? "outline" : "default"}
-                                  size="sm"
-                                  className={cn(
-                                    "w-full rounded-md transform transition-all hover:scale-[1.02] hover:shadow-md",
-                                    isSubscribed(hospital.id)
-                                      ? "border-hero-red text-hero-red hover:bg-red-50"
-                                      : "bg-gradient-to-r from-hero-red to-red-600 hover:bg-hero-red/90 text-white",
-                                  )}
-                                  onClick={() => handleSubscription(hospital.id, isSubscribed(hospital.id))}
-                                  disabled={isLoading}
+                                  id={`subscribe-btn-${hospital.id}`}
+                                  variant={isSubscribed(hospital) ? "outline" : "default"}
+                                  onClick={() => {
+                                    const subscription = subscribedCenters.find(
+                                      sub => sub.bloodTansfusionCenterId === hospital.id
+                                    );
+                                    handleSubscriptionToggle(
+                                      hospital.id, 
+                                      isSubscribed(hospital) ? (subscription?.id || hospital.id) : null
+                                    );
+                                  }}
                                 >
-                                  {isLoading ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <Bell className="h-4 w-4 mr-2" />
-                                  )}
-                                  {isSubscribed(hospital.id) ? "Se désabonner" : "S'abonner aux notifications"}
+                                  {isSubscribed(hospital) ? "Se désabonner" : "S'abonner aux notifications"}
                                 </Button>
                               </div>
                             )}

@@ -6,7 +6,20 @@ import { useToast } from "@/components/ui/use-toast";
 import { ApplicationUserDTO } from "@/client/models";
 import { createAuthenticatedClient } from "@/services/api/core";
 
-// Enhanced User type with all donor fields
+// Add these types first to make TypeScript happy
+type NotificationSettings = {
+  enableNotifications: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  subscribedHospitals: string[];
+}
+
+type PrivacySettings = {
+  showOnPublicList: boolean;
+  isAnonymous: boolean;
+}
+
+// Update User type to include these settings properly
 type User = {
   id: string;
   name: string;
@@ -29,6 +42,10 @@ type User = {
   donorNotesForBTC?: string;
   donorLastDonationDate?: string;
   communeId?: number;
+
+  // Add proper typing for these notification-related fields
+  notificationPreferences?: NotificationSettings;
+  privacySettings?: PrivacySettings;
 } | null;
 
 type AuthContextType = {
@@ -37,14 +54,23 @@ type AuthContextType = {
   logout: () => void;
   isLoading: boolean;
   fetchUserData: (userId: string, token: string) => Promise<void>;
+  // Add these method definitions with proper types
+  updateNotificationPreferences: (preferences: NotificationSettings) => void;
+  updatePrivacySettings: (settings: PrivacySettings) => void;
+  unsubscribeFromHospital: (hospitalId: string) => void;
 };
 
+// Make sure the context default value has these methods
 const AuthContext = createContext<AuthContextType>({
   user: null,
   setUser: () => {},
   logout: () => {},
   isLoading: true,
-  fetchUserData: async () => {}
+  fetchUserData: async () => {},
+  // Add default implementations
+  updateNotificationPreferences: () => {},
+  updatePrivacySettings: () => {},
+  unsubscribeFromHospital: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -84,20 +110,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Create a complete user object with API data and token
         const completeUser: User = {
           id: primaryId,
-          name: userData.firstName && userData.lastName 
+          name: userData.firstName && userData.lastName
             ? `${userData.firstName} ${userData.lastName}`
             : userData.username || "Utilisateur",
           email: userData.email || "",
           token: token,
-          
+
           // Use numeric donorBloodGroup for blood type
-          bloodType: userData.donorBloodGroup 
-            ? mapBloodGroupToString(userData.donorBloodGroup) 
+          bloodType: userData.donorBloodGroup
+            ? mapBloodGroupToString(userData.donorBloodGroup)
             : undefined,
           donorBloodGroup: userData.donorBloodGroup || undefined,
-          
+
           wilaya: userData.wilaya?.name,
-          
+
           // Map all donor fields from the API response
           donorCorrelationId: userData.donorCorrelationId || undefined,
           donorWantToStayAnonymous: userData.donorWantToStayAnonymous || false,
@@ -111,6 +137,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           donorNotesForBTC: userData.donorNotesForBTC || undefined,
           donorLastDonationDate: userData.donorLastDonationDate ? new Date(userData.donorLastDonationDate).toISOString() : undefined,
           communeId: userData.communeId || undefined,
+          notificationPreferences: {
+            enableNotifications: true,
+            emailNotifications: true,
+            smsNotifications: true,
+            subscribedHospitals: []
+          },
+          privacySettings: {
+            showOnPublicList: true,
+            isAnonymous: false
+          }
         };
         
         console.log(`[AUTH] User data processing complete. Updated user object:`, completeUser);
@@ -216,8 +252,77 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Add these new methods
+  const updateNotificationPreferences = (preferences: NotificationSettings) => {
+    if (!user) return;
+    
+    // Update user state with new preferences
+    setUser({
+      ...user,
+      notificationPreferences: preferences
+    });
+    
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        localStorage.setItem("user", JSON.stringify({
+          ...parsedUser,
+          notificationPreferences: preferences
+        }));
+      }
+    }
+    
+    // Here you would typically make an API call to update preferences on the server
+    // Example: updateUserPreferencesApi(user.id, preferences);
+  };
+  
+  const updatePrivacySettings = (settings: PrivacySettings) => {
+    if (!user) return;
+    
+    // Update user state with new settings
+    setUser({
+      ...user,
+      privacySettings: settings
+    });
+    
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        localStorage.setItem("user", JSON.stringify({
+          ...parsedUser,
+          privacySettings: settings
+        }));
+      }
+    }
+    
+    // Here you would typically make an API call to update settings on the server
+    // Example: updateUserPrivacyApi(user.id, settings);
+  };
+  
+  const unsubscribeFromHospital = (hospitalId: string) => {
+    // Here you would typically make an API call to unsubscribe from a hospital
+    // Example: unsubscribeFromHospitalApi(user.id, hospitalId);
+    
+    // For now, just console.log
+    console.log(`Unsubscribing from hospital ${hospitalId}`);
+  };
+
+  // Update the provider value to include the new methods
   return (
-    <AuthContext.Provider value={{ user, setUser, logout, isLoading, fetchUserData }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      setUser, 
+      logout, 
+      isLoading, 
+      fetchUserData,
+      updateNotificationPreferences,
+      updatePrivacySettings,
+      unsubscribeFromHospital
+    }}>
       {children}
     </AuthContext.Provider>
   );
