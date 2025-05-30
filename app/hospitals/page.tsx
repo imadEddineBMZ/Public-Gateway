@@ -17,9 +17,7 @@ import {
   unsubscribeFromBloodTansfusionCenter
 } from "@/services/api-service"
 import { BloodTansfusionCenterDTO } from "@/client/models"
-
-// Import the useAuth hook at the top
-import { useAuth } from "@/components/auth-provider"
+  import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/components/ui/use-toast"
 import { 
   Pagination, 
@@ -51,7 +49,6 @@ export default function HospitalsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
   const [wilayaFilter, setWilayaFilter] = useState<string>("all")
   const [hospitals, setHospitals] = useState<Hospital[]>([])
   const [wilayas, setWilayas] = useState<string[]>([])
@@ -120,7 +117,7 @@ export default function HospitalsPage() {
     fetchData()
   }, [toast])
 
-  // Determine hospital type based on name
+  // Determine hospital type based on name (still needed for badge display)
   function determineHospitalType(name: string): "public" | "private" | "clinic" {
     const lowerName = name.toLowerCase()
     if (lowerName.includes("chu") || lowerName.includes("public")) {
@@ -132,22 +129,15 @@ export default function HospitalsPage() {
     }
   }
 
-  const hospitalTypes = [
-    { value: "public", label: "Hôpital public" },
-    { value: "private", label: "Clinique privée" },
-    { value: "clinic", label: "Centre médical" },
-  ]
-
-  // Filter hospitals
+  // Filter hospitals (removed type filter)
   const filteredHospitals = hospitals.filter((hospital) => {
     const matchesSearchTerm =
       hospital.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       hospital.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
       hospital.specialties.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesType = typeFilter === "all" || hospital.type === typeFilter
     const matchesWilaya = wilayaFilter === "all" || hospital.wilaya === wilayaFilter
 
-    return matchesSearchTerm && matchesType && matchesWilaya
+    return matchesSearchTerm && matchesWilaya
   })
 
   // Pagination logic
@@ -159,18 +149,14 @@ export default function HospitalsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, typeFilter, wilayaFilter])
+  }, [searchTerm, wilayaFilter])
 
   // Change page
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
   const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages))
   const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1))
 
-  const getTypeLabel = (type: string) => {
-    const typeObj = hospitalTypes.find((t) => t.value === type)
-    return typeObj ? typeObj.label : type
-  }
-
+  // Get badge color based on hospital type
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
       case "public":
@@ -208,7 +194,7 @@ export default function HospitalsPage() {
         })
       } else {
         // Subscribe using API
-        const response = await subscribeToBloodTansfusionCenter(user.token, hospitalId)
+        await subscribeToBloodTansfusionCenter(user.token, hospitalId)
         setSubscribedCenters(prev => [...prev, hospitalId])
         toast({
           title: "Abonnement réussi",
@@ -229,8 +215,7 @@ export default function HospitalsPage() {
   }
 
   const isSubscribed = (hospitalId: string) => {
-    return user?.notificationPreferences?.subscribedHospitals.includes(hospitalId) || 
-           subscribedCenters.includes(hospitalId) || 
+    return subscribedCenters.includes(hospitalId) || 
            false
   }
 
@@ -311,7 +296,7 @@ export default function HospitalsPage() {
           className="space-y-6"
         >
           {/* Hero Section */}
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-4 py-4 bg-gradient-to-r from-trust-blue/5 via-blue-50 to-trust-blue/5 rounded-2xl px-6">
             <h1 className="text-4xl font-bold text-trust-blue">Nos Hôpitaux Partenaires</h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Découvrez les établissements de santé qui font partie de notre réseau de don de sang à travers l'Algérie.
@@ -320,22 +305,29 @@ export default function HospitalsPage() {
 
           {/* Loading state */}
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-12 w-12 text-hero-red animate-spin" />
-              <span className="ml-2 text-lg">Chargement des hôpitaux...</span>
+            <div className="flex flex-col justify-center items-center py-12 bg-white rounded-lg border border-gray-100 shadow-sm">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent animate-pulse rounded-full" />
+                <Loader2 className="h-16 w-16 text-hero-red animate-spin" />
+              </div>
+              <span className="mt-4 text-lg font-medium text-gray-700">Chargement des hôpitaux...</span>
+              <p className="text-sm text-gray-500 mt-2">Veuillez patienter pendant que nous récupérons les informations</p>
             </div>
           ) : (
             <>
-              {/* Filtres */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Rechercher des hôpitaux</CardTitle>
-                  <CardDescription>Filtrez les hôpitaux par nom, type ou wilaya</CardDescription>
+              {/* Filtres - Removed type filter and restyled to 2-column grid */}
+              <Card className="border-t-4 border-t-trust-blue">
+                <CardHeader className="pb-3 bg-gradient-to-r from-trust-blue/5 to-transparent">
+                  <CardTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    Rechercher des hôpitaux
+                  </CardTitle>
+                  <CardDescription>Trouvez rapidement un établissement par nom ou wilaya</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label htmlFor="search" className="text-sm font-medium">
+                      <label htmlFor="search" className="text-sm font-medium text-gray-700">
                         Recherche
                       </label>
                       <div className="relative">
@@ -343,36 +335,18 @@ export default function HospitalsPage() {
                         <Input
                           id="search"
                           placeholder="Nom, adresse ou spécialité..."
-                          className="pl-9"
+                          className="pl-9 border-gray-300 focus:border-trust-blue focus:ring-trust-blue/20"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="type" className="text-sm font-medium">
-                        Type d'établissement
-                      </label>
-                      <Select value={typeFilter} onValueChange={setTypeFilter}>
-                        <SelectTrigger id="type">
-                          <SelectValue placeholder="Tous les types" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tous les types</SelectItem>
-                          {hospitalTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="wilaya" className="text-sm font-medium">
+                      <label htmlFor="wilaya" className="text-sm font-medium text-gray-700">
                         Wilaya
                       </label>
                       <Select value={wilayaFilter} onValueChange={setWilayaFilter}>
-                        <SelectTrigger id="wilaya">
+                        <SelectTrigger id="wilaya" className="border-gray-300 focus:border-trust-blue focus:ring-trust-blue/20">
                           <SelectValue placeholder="Toutes les wilayas" />
                         </SelectTrigger>
                         <SelectContent>
@@ -390,11 +364,7 @@ export default function HospitalsPage() {
               </Card>
 
               {/* Liste des hôpitaux */}
-              {filteredHospitals.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-lg border">
-                  <p className="text-gray-500">Aucun hôpital ne correspond à vos critères de recherche.</p>
-                </div>
-              ) : (
+              {filteredHospitals.length > 0 && (
                 <>
                   <div className="grid gap-6 md:grid-cols-2">
                     {currentHospitals.map((hospital, index) => (
@@ -404,41 +374,44 @@ export default function HospitalsPage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                       >
-                        <Card className="hover:shadow-lg transition-shadow duration-300 h-full">
-                          <CardHeader className="pb-4">
+                        <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full border-t-4 border-t-trust-blue/70">
+                          <CardHeader className="pb-3">
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-trust-blue/10 rounded-lg flex items-center justify-center">
+                                <div className="w-12 h-12 bg-gradient-to-br from-trust-blue/20 to-trust-blue/5 rounded-lg flex items-center justify-center shadow-sm">
                                   <Building2 className="h-6 w-6 text-trust-blue" />
                                 </div>
                                 <div>
-                                  <h3 className="font-semibold text-lg">{hospital.name}</h3>
-                                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                                  <h3 className="font-semibold text-lg leading-tight">{hospital.name}</h3>
+                                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                     <MapPin className="h-3.5 w-3.5" />
                                     <span>{hospital.wilaya}</span>
                                   </div>
                                 </div>
                               </div>
-                              <Badge className={getTypeBadgeColor(hospital.type)}>{getTypeLabel(hospital.type)}</Badge>
+                              <Badge className={`${getTypeBadgeColor(hospital.type)} shadow-sm`}>
+                                {hospital.type === "public" ? "Public" : 
+                                 hospital.type === "private" ? "Privé" : "Centre"}
+                              </Badge>
                             </div>
                           </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="space-y-2">
+                          <CardContent className="space-y-4 pt-0">
+                            <div className="space-y-2 bg-gray-50 p-3 rounded-md">
                               <div className="flex items-start gap-2 text-sm">
-                                <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                                <span className="text-gray-600">{hospital.address}</span>
+                                <MapPin className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                <span className="text-gray-700">{hospital.address}</span>
                               </div>
                               <div className="flex items-center gap-2 text-sm">
-                                <Phone className="h-4 w-4 text-gray-400" />
-                                <span className="text-gray-600">{hospital.phone}</span>
+                                <Phone className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700">{hospital.phone}</span>
                               </div>
                               <div className="flex items-center gap-2 text-sm">
-                                <Clock className="h-4 w-4 text-gray-400" />
-                                <span className="text-gray-600">{hospital.openHours}</span>
+                                <Clock className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700">{hospital.openHours}</span>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4 py-3 border-t border-gray-100">
+                            <div className="grid grid-cols-2 gap-4 py-3 border-t border-b border-gray-100">
                               <div className="text-center">
                                 <div className="text-lg font-bold text-hero-red">{hospital.activeRequests}</div>
                                 <div className="text-xs text-gray-500">Demandes actives</div>
@@ -447,22 +420,22 @@ export default function HospitalsPage() {
                                 <div className="text-lg font-bold text-trust-blue">{hospital.totalRequests}</div>
                                 <div className="text-xs text-gray-500">Total demandes</div>
                               </div>
-                              <div className="text-center">
-                                <div className="text-lg font-bold text-life-green">{hospital.bloodBankCapacity}</div>
-                                <div className="text-xs text-gray-500">Capacité banque</div>
-                              </div>
                             </div>
 
                             <div>
                               <span className="text-sm font-medium text-gray-700 mb-2 block">Spécialités:</span>
                               <div className="flex flex-wrap gap-1">
                                 {hospital.specialties.slice(0, 3).map((specialty, specialtyIndex) => (
-                                  <Badge key={specialtyIndex} variant="outline" className="text-xs">
+                                  <Badge 
+                                    key={specialtyIndex} 
+                                    variant="outline" 
+                                    className="text-xs bg-gray-50 border-gray-200"
+                                  >
                                     {specialty}
                                   </Badge>
                                 ))}
                                 {hospital.specialties.length > 3 && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className="text-xs bg-gray-50 border-gray-200">
                                     +{hospital.specialties.length - 3}
                                   </Badge>
                                 )}
@@ -475,10 +448,10 @@ export default function HospitalsPage() {
                                   variant={isSubscribed(hospital.id) ? "outline" : "default"}
                                   size="sm"
                                   className={cn(
-                                    "w-full",
+                                    "w-full rounded-md transform transition-all hover:scale-[1.02] hover:shadow-md",
                                     isSubscribed(hospital.id)
                                       ? "border-hero-red text-hero-red hover:bg-red-50"
-                                      : "bg-hero-red hover:bg-hero-red/90 text-white",
+                                      : "bg-gradient-to-r from-hero-red to-red-600 hover:bg-hero-red/90 text-white",
                                   )}
                                   onClick={() => handleSubscription(hospital.id, isSubscribed(hospital.id))}
                                   disabled={isLoading}
@@ -508,30 +481,44 @@ export default function HospitalsPage() {
                 </>
               )}
 
+              {/* No results message */}
+              {filteredHospitals.length === 0 && (
+                <div className="text-center py-12 bg-white rounded-lg border flex flex-col items-center">
+                  <div className="rounded-full bg-gray-100 p-4 mb-3">
+                    <Search className="h-6 w-6 text-gray-400" />
+                  </div>
+                  <p className="text-gray-700 font-medium">Aucun hôpital ne correspond à vos critères</p>
+                  <p className="text-gray-500 mt-1">Veuillez essayer une autre recherche ou wilaya</p>
+                </div>
+              )}
+
               {/* Statistiques */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Statistiques des hôpitaux</CardTitle>
+              <Card className="border-t-4 border-t-trust-blue overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-trust-blue/5 to-transparent pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Statistiques des hôpitaux
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-trust-blue/10 rounded-lg">
+                    <div className="text-center p-4 bg-trust-blue/10 rounded-lg border border-trust-blue/20 hover:shadow-md transition-shadow">
                       <div className="text-2xl font-bold text-trust-blue">{hospitals.length}</div>
                       <div className="text-sm text-gray-600">Hôpitaux partenaires</div>
                     </div>
-                    <div className="text-center p-4 bg-hero-red/10 rounded-lg">
+                    <div className="text-center p-4 bg-hero-red/10 rounded-lg border border-hero-red/20 hover:shadow-md transition-shadow">
                       <div className="text-2xl font-bold text-hero-red">
                         {hospitals.reduce((sum, h) => sum + h.activeRequests, 0)}
                       </div>
                       <div className="text-sm text-gray-600">Demandes actives</div>
                     </div>
-                    <div className="text-center p-4 bg-life-green/10 rounded-lg">
+                    <div className="text-center p-4 bg-life-green/10 rounded-lg border border-life-green/20 hover:shadow-md transition-shadow">
                       <div className="text-2xl font-bold text-life-green">
                         {hospitals.reduce((sum, h) => sum + h.bloodBankCapacity, 0)}
                       </div>
                       <div className="text-sm text-gray-600">Capacité totale</div>
                     </div>
-                    <div className="text-center p-4 bg-hope-purple/10 rounded-lg">
+                    <div className="text-center p-4 bg-hope-purple/10 rounded-lg border border-hope-purple/20 hover:shadow-md transition-shadow">
                       <div className="text-2xl font-bold text-hope-purple">
                         {new Set(hospitals.map((h) => h.wilaya)).size}
                       </div>

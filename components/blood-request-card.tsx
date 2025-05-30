@@ -16,24 +16,55 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { AlertTriangle, Clock, MapPin, Share2, Heart, UserPlus } from "lucide-react"
+import { AlertTriangle, Clock, MapPin, Share2, Heart, UserPlus, Droplet } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
+// Blood Group Mapping
+const BLOOD_GROUP_MAP = {
+  1: "AB+",
+  2: "AB-",
+  3: "A+", 
+  4: "A-",
+  5: "B+",
+  6: "B-",
+  7: "O+",
+  8: "O-"
+}
+
+// Priority Mapping
+const PRIORITY_MAP = {
+  1: "low",
+  2: "standard", 
+  3: "critical"
+}
+
+// Donation Type Mapping
+const DONATION_TYPE_MAP = {
+  1: "Sang total",
+  2: "Plaquettes",
+  3: "Plasma"
+}
+
 // Types pour les demandes de sang
-type RequestUrgency = "critical" | "urgent" | "standard"
+type RequestUrgency = "critical" | "urgent" | "standard" | "low"
+
 type BloodRequest = {
   id: string
   hospitalName: string
   bloodType: string
+  bloodGroup: number
+  donationType: number
+  priority: number
   urgency: RequestUrgency
   deadline: string
   location: string
   distance: number
   notes: string
+  unitsNeeded: number
 }
 
 interface BloodRequestCardProps {
@@ -46,14 +77,25 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
   const { user } = useAuth()
   const [isInterested, setIsInterested] = useState(false)
 
+  // Get blood type from numeric code
+  const bloodGroupText = BLOOD_GROUP_MAP[request.bloodGroup as keyof typeof BLOOD_GROUP_MAP] || request.bloodType;
+  
+  // Get donation type text
+  const donationTypeText = DONATION_TYPE_MAP[request.donationType as keyof typeof DONATION_TYPE_MAP] || "Sang";
+  
+  // Get priority/urgency from numeric code
+  const priorityCode = request.priority || 2; // Default to standard if missing
+  const urgencyValue = PRIORITY_MAP[priorityCode as keyof typeof PRIORITY_MAP] || "standard";
+
   // Fonction pour obtenir la couleur du badge en fonction de l'urgence
   const getUrgencyBadgeVariant = (urgency: RequestUrgency) => {
     switch (urgency) {
       case "critical":
         return "destructive"
       case "urgent":
-        return "default"
       case "standard":
+        return "default"
+      case "low":
         return "outline"
       default:
         return "outline"
@@ -69,6 +111,8 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
         return "Urgent"
       case "standard":
         return "Standard"
+      case "low":
+        return "Non urgent"
       default:
         return urgency
     }
@@ -101,13 +145,14 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
       })
       return
     }
+
     router.push(`/dashboard/pledges/new?requestId=${request.id}`)
   }
 
   const handleShare = () => {
     // Simuler le partage
     const shareUrl = `${window.location.origin}/request/${request.id}`
-    const shareText = `Aidez à sauver une vie à ${request.location} - Besoin urgent de sang ${request.bloodType}!`
+    const shareText = `Aidez à sauver une vie à ${request.location} - Besoin urgent de sang ${bloodGroupText}!`
 
     if (navigator.share) {
       navigator.share({
@@ -127,15 +172,15 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
   }
 
   const headerClassName = cn(
-    request.urgency === "critical"
+    urgencyValue === "critical"
       ? "bg-gradient-to-r from-alert-coral to-red-400 text-white"
-      : request.urgency === "urgent"
+      : urgencyValue === "standard"
         ? "bg-gradient-to-r from-hero-red to-red-500 text-white"
         : "bg-gradient-to-r from-gray-100 to-gray-50",
   )
 
   const badgeClassName = cn(
-    request.urgency === "critical" || request.urgency === "urgent" ? "bg-white/20 text-white border-white/30" : "",
+    urgencyValue === "critical" || urgencyValue === "standard" ? "bg-white/20 text-white border-white/30" : "",
   )
 
   const buttonClassName = cn(
@@ -159,13 +204,13 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
             <CardTitle className="text-lg">{request.hospitalName}</CardTitle>
             <Badge
               variant={
-                request.urgency === "critical" || request.urgency === "urgent"
+                urgencyValue === "critical" || urgencyValue === "standard"
                   ? "outline"
-                  : getUrgencyBadgeVariant(request.urgency)
+                  : getUrgencyBadgeVariant(urgencyValue as RequestUrgency)
               }
               className={badgeClassName}
             >
-              {getUrgencyText(request.urgency)}
+              {getUrgencyText(urgencyValue as RequestUrgency)}
             </Badge>
           </div>
           <div className="flex items-center gap-1 text-sm text-white/80">
@@ -178,21 +223,29 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
         <CardContent className="p-4 flex-grow">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-100 to-red-50 flex items-center justify-center text-hero-red font-bold text-lg shadow-sm">
-              {request.bloodType}
+              {bloodGroupText}
             </div>
             <div>
+              
               <div className="text-sm text-gray-500 flex items-center">
                 <Clock className="h-3.5 w-3.5 mr-1" />
                 <span>Date limite:</span>
               </div>
               <div className="font-medium">{new Date(request.deadline).toLocaleDateString("fr-FR")}</div>
             </div>
+            <div className="ml-auto text-right">
+              <div className="text-sm text-gray-500">Type de don</div>
+              <div className="font-medium flex items-center justify-end gap-1">
+                <Droplet className="h-3.5 w-3.5" />
+                {donationTypeText}
+              </div>
+            </div>
           </div>
 
           <p className="text-sm text-gray-600 mb-4">{request.notes}</p>
 
           <div className="flex items-center gap-2 text-sm">
-            {request.urgency === "critical" && (
+            {urgencyValue === "critical" && (
               <div className="flex items-center gap-1 text-alert-coral animate-pulse">
                 <AlertTriangle className="h-4 w-4" />
                 <span>Besoin critique</span>

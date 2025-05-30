@@ -22,14 +22,13 @@ export interface SubscribedRequestBuilder extends BaseRequestBuilder<SubscribedR
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<SubscribedRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 export interface SubscribedRequestBuilderGetQueryParameters {
-    filter?: string;
     level?: number;
-    loggedUserId?: string;
+    paginationTake?: number;
 }
 /**
  * Uri template for the request builder.
  */
-export const SubscribedRequestBuilderUriTemplate = "{+baseurl}/BTC/subscribed{?filter*,level*,loggedUserId*}";
+export const SubscribedRequestBuilderUriTemplate = "{+baseurl}/BTC/subscribed{?level*,paginationTake*}";
 /**
  * Metadata for all the requests in the request builder.
  */

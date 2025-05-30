@@ -12,7 +12,6 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  * Builds and executes requests for operations under /BTC
  */
 export interface BTCRequestBuilder extends BaseRequestBuilder<BTCRequestBuilder> {
-  byBtcId(btcId: string): unknown;
     /**
      * The subscribed property
      */

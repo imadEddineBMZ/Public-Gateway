@@ -10,10 +10,6 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  * Builds and executes requests for operations under /BloodDonationRequests
  */
 export interface BloodDonationRequestsRequestBuilder extends BaseRequestBuilder<BloodDonationRequestsRequestBuilder> {
-     subscribed: any;
-     matching: any;
-     nearby: any;
-     post(requestData: any): unknown;
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListBloodDonationRequestsResponse>}

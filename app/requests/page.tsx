@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Clock, AlertTriangle, Heart, Building2, UserPlus, HandHeart, ExternalLink, Loader2 } from "lucide-react"
+import { Search, MapPin, Clock,Droplet, AlertTriangle, Heart, Building2, UserPlus, HandHeart, ExternalLink, Loader2, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/components/auth-provider"
 import { cn } from "@/lib/utils"
@@ -28,8 +28,21 @@ import {
   getPublicBloodDonationRequests, 
   getAuthenticatedBloodDonationRequests,
   getWilayas,
-  pledgeToDonate 
+  pledgeToDonate,
+  createPledge
 } from "@/services/api-service"
+import { WILAYA_MAP } from "@/services/api/locations/locations-service"
+import { Checkbox } from "@/components/ui/checkbox"
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationEllipsis, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious 
+} from "@/components/ui/pagination"
+import { Textarea } from "@/components/ui/textarea"
 
 // Types pour les demandes de sang
 type RequestUrgency = "critical" | "urgent" | "standard"
@@ -38,19 +51,44 @@ type BloodRequest = {
   hospitalName: string
   hospitalType: "public" | "private" | "clinic"
   bloodType: string
+  bloodGroup?: number
   urgency: RequestUrgency
   deadline: string
   location: string
+  wilayaId?: number // Add this to store the original wilaya ID
   distance: number
   notes: string
   unitsNeeded: number
-  unitsCollected: number
   contactInfo: {
     phone: string
     email: string
     contactPerson: string
   }
 }
+
+// Blood Group Mapping
+const BLOOD_GROUP_MAP = {
+  1: "AB+",
+  2: "AB-",
+  3: "A+",
+  4: "A-",
+  5: "B+",
+  6: "B-",
+  7: "O+",
+  8: "O-"
+};
+
+// Compatibility mapping for blood types (simplified)
+const BLOOD_TYPE_COMPATIBILITY = {
+  "A+": ["A+", "A-", "O+", "O-"],
+  "A-": ["A-", "O-"],
+  "B+": ["B+", "B-", "O+", "O-"],
+  "B-": ["B-", "O-"],
+  "AB+": ["AB+", "AB-", "A+", "A-", "B+", "B-", "O+", "O-"],
+  "AB-": ["AB-", "A-", "B-", "O-"],
+  "O+": ["O+"],
+  "O-": ["O-"],
+};
 
 export default function RequestsPage() {
   const { user } = useAuth()
@@ -60,38 +98,70 @@ export default function RequestsPage() {
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all")
   const [bloodTypeFilter, setBloodTypeFilter] = useState<string>("all")
   const [wilayaFilter, setWilayaFilter] = useState<string>("all")
+  const [compatibilityFilter, setCompatibilityFilter] = useState(false)
   const [requests, setRequests] = useState<BloodRequest[]>([])
   const [wilayas, setWilayas] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPledging, setIsPledging] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [requestsPerPage] = useState(6) // Number of requests per page
+  const [pledgeNotes, setPledgeNotes] = useState("") // State for pledge notes
 
   const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+
+  // Utility function for debugging API responses
+  const debugLog = (message: string, data: any) => {
+    console.log(`[DEBUG] ${message}:`, data);
+    // For development, we can display in the console what we're receiving
+    if (typeof data === 'object') {
+      console.log('Keys:', Object.keys(data || {}));
+    }
+  };
+
+  // Retry mechanism for failed data fetching
+  const fetchWithRetry = async (fetchFn: () => Promise<any>, retries = 2) => {
+    try {
+      return await fetchFn();
+    } catch (error) {
+      if (retries > 0) {
+        console.log(`Retrying fetch... (${retries} attempts left)`);
+        return fetchWithRetry(fetchFn, retries - 1);
+      }
+      throw error;
+    }
+  };
 
   // Fetch data when component mounts
   useEffect(() => {
     async function fetchData() {
-      setIsLoading(true)
+      setIsLoading(true);
+      setError(null);
+      
       try {
         // Add fetch level parameter to get the blood transfusion center data
-        const fetchLevel = 2; // Level 1 includes blood transfusion centers
+        const fetchLevel = 2;
         
         // Fetch blood donation requests based on authentication status with fetchLevel
-        const requestsData = user?.token
-          ? await getAuthenticatedBloodDonationRequests(user.token, fetchLevel)
-          : await getPublicBloodDonationRequests(fetchLevel)
+        debugLog("Fetching requests with auth status", !!user?.token);
         
-        console.log("API blood requests response:", requestsData);
+        const requestsData = await fetchWithRetry(async () => {
+          return user?.token
+            ? await getAuthenticatedBloodDonationRequests(user.token, fetchLevel)
+            : await getPublicBloodDonationRequests(fetchLevel);
+        });
+        
+        debugLog("API blood requests response", requestsData);
         
         // Map API data to our BloodRequest format
         if (requestsData && Array.isArray(requestsData)) {
           const mappedRequests: BloodRequest[] = requestsData.map(req => {
             // Log each request to inspect the structure
-            console.log("Processing request:", req);
-            console.log("BTC data:", req.bloodTansfusionCenter);
+            debugLog("Processing request", req);
+            debugLog("BTC data", req.bloodTansfusionCenter);
             
             return {
               id: req.id || "",
-              // Try different ways to access the hospital name
               hospitalName: req.bloodTansfusionCenter?.name || 
                             req.btc?.name || 
                             req.bloodTransfusionCenter?.name || 
@@ -104,18 +174,23 @@ export default function RequestsPage() {
                 req.hospitalName || 
                 ""
               ),
-              bloodType: req.bloodType || "?",
-              urgency: determineUrgency(req.evolutionStatus, req.deadline),
-              deadline: req.deadline || new Date().toISOString().split('T')[0],
-              location: req.bloodTansfusionCenter?.wilaya?.name || 
-                        req.btc?.wilaya?.name || 
-                        req.bloodTransfusionCenter?.wilaya?.name || 
-                        req.location || 
-                        "Inconnu",
+              // Convert numeric blood group to text representation
+              bloodType: req.bloodGroup ? BLOOD_GROUP_MAP[req.bloodGroup as keyof typeof BLOOD_GROUP_MAP] || "?" : req.bloodType || req.donorBloodGroup || "?",
+              bloodGroup: req.bloodGroup, // Store the original numeric value
+              urgency: determineUrgency(req.evolutionStatus, req.requestDueDate || req.deadline),
+              deadline: req.requestDueDate || req.deadline || new Date().toISOString().split('T')[0],
+              // Use wilaya ID mapping when available
+              location: getWilayaName(
+                req.bloodTansfusionCenter?.wilaya?.id,
+                req.bloodTansfusionCenter?.wilaya?.name || 
+                req.btc?.wilaya?.name || 
+                req.bloodTransfusionCenter?.wilaya?.name || 
+                req.location
+              ),
+              wilayaId: req.bloodTansfusionCenter?.wilaya?.id || req.btc?.wilaya?.id || req.bloodTransfusionCenter?.wilaya?.id, // Store the original ID
               distance: 5, // Default distance
-              notes: req.description || req.notes || "",
-              unitsNeeded: req.unitsNeeded || 1,
-              unitsCollected: req.unitsCollected || 0,
+              notes: req.moreDetails || req.description || req.notes || "",
+              unitsNeeded: req.requestedQty || req.unitsNeeded || 1,
               contactInfo: {
                 phone: req.bloodTansfusionCenter?.tel || 
                        req.btc?.tel || 
@@ -134,37 +209,91 @@ export default function RequestsPage() {
             };
           });
           
+          debugLog("Mapped requests", mappedRequests);
           setRequests(mappedRequests);
         } else {
-          console.error("Unexpected data format:", requestsData)
+          console.error("Unexpected data format:", requestsData);
+          setError("Les données reçues ne sont pas dans le format attendu.");
           toast({
             title: "Erreur de format",
             description: "Les données reçues ne sont pas dans le format attendu.",
             variant: "destructive",
-          })
+          });
         }
         
         // Fetch wilayas for filtering
-        const wilayasData = await getWilayas()
+        const wilayasData = await getWilayas();
+        debugLog("Wilayas data", wilayasData);
+        
         if (wilayasData && Array.isArray(wilayasData)) {
-          const wilayaNames = wilayasData.map(w => w.name || "").filter(Boolean)
-          setWilayas(wilayaNames)
+          // Try to get names from API data first
+          let wilayaNames = wilayasData.map(w => w.name || "").filter(Boolean);
+          
+          // If API didn't return enough names, use our mapping
+          if (wilayaNames.length < 10) { // threshold to detect if API data is incomplete
+            wilayaNames = Object.values(WILAYA_MAP).sort();
+          }
+          
+          setWilayas(wilayaNames);
+        } else {
+          // Fallback to our mapping if API fails
+          setWilayas(Object.values(WILAYA_MAP).sort());
         }
       } catch (error) {
-        console.error("Error fetching data:", error)
+        console.error("Error fetching data:", error);
+        setError("Impossible de charger les demandes de sang. Veuillez réessayer.");
         toast({
           title: "Erreur de connexion",
           description: "Impossible de charger les demandes de sang. Veuillez réessayer plus tard.",
           variant: "destructive",
-        })
+        });
+        
+        // If API fails, add some fallback data to still show the UI
+        setRequests([
+          {
+            id: "fallback-1",
+            hospitalName: "Hôpital Central",
+            hospitalType: "public",
+            bloodType: "O+",
+            urgency: "critical",
+            deadline: new Date().toISOString().split('T')[0],
+            location: "Alger",
+            distance: 2.5,
+            notes: "Données temporaires - Problème de connexion à l'API",
+            unitsNeeded: 3,
+            contactInfo: {
+              phone: "0123456789",
+              email: "contact@hopital.dz",
+              contactPerson: "Service de transfusion",
+            },
+          },
+          {
+            id: "fallback-2",
+            hospitalName: "Clinique El Azhar",
+            hospitalType: "private",
+            bloodType: "A+",
+            urgency: "standard",
+            deadline: new Date().toISOString().split('T')[0],
+            location: "Oran",
+            distance: 4.8,
+            notes: "Données temporaires - Problème de connexion à l'API",
+            unitsNeeded: 2,
+            contactInfo: {
+              phone: "0123456789",
+              email: "contact@clinique.dz",
+              contactPerson: "Service de transfusion",
+            },
+          }
+        ]);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
     
-    fetchData()
-  }, [toast, user])
+    fetchData();
+  }, [toast, user]);
   
+
   // Determine hospital type based on name
   function determineHospitalType(name: string): "public" | "private" | "clinic" {
     const lowerName = name.toLowerCase()
@@ -206,7 +335,17 @@ export default function RequestsPage() {
 
     try {
       setIsPledging(true)
-      await pledgeToDonate(user.token, requestId)
+      
+      // Create pledge data object with all required fields
+      const pledgeData = {
+        bloodDonationRequestId: requestId,
+        pledgeDate: new Date().toISOString(),
+        pledgeNotes: pledgeNotes || "Engagement depuis la page des demandes"
+      }
+      
+      const response = await createPledge(user.token, pledgeData)
+      
+      console.log("Pledge created successfully:", response)
       
       toast({
         title: "Engagement réussi",
@@ -215,11 +354,24 @@ export default function RequestsPage() {
       })
       
       router.push(`/dashboard/pledges?new=true`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error pledging to donate:", error)
+      
+      // Enhanced error handling based on API error format
+      let errorMessage = "Une erreur est survenue lors de l'engagement. Veuillez réessayer."
+      
+      if (error?.errors && Array.isArray(error.errors)) {
+        // Extract specific error messages from the error response
+        errorMessage = error.errors.map((err: any) => 
+          `${err.name || 'Erreur'}: ${err.reason || 'Inconnue'}`
+        ).join(", ")
+      } else if (error?.detail) {
+        errorMessage = error.detail
+      }
+      
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de l'engagement. Veuillez réessayer.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -227,19 +379,67 @@ export default function RequestsPage() {
     }
   }
 
+  // Retry loading data
+  const handleRetry = () => {
+    setRequests([]);
+    setWilayas([]);
+    setIsLoading(true);
+    setError(null);
+    
+    // Re-trigger the useEffect
+    const timer = setTimeout(() => {
+      // This will cause the useEffect to run again
+      router.refresh();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  };
+
   // Filtrer les demandes
   const filteredRequests = requests.filter((request) => {
+    // Basic search term matching
     const matchesSearchTerm =
       request.hospitalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.notes.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Filter by urgency
     const matchesUrgency = urgencyFilter === "all" || request.urgency === urgencyFilter
+    
+    // Filter by blood type
     const matchesBloodType = bloodTypeFilter === "all" || request.bloodType === bloodTypeFilter
-    const matchesWilaya = wilayaFilter === "all" || request.location === wilayaFilter
+    
+    // Filter by wilaya
+    const matchesWilaya = wilayaFilter === "all" || 
+                     request.location === wilayaFilter || 
+                     (request.wilayaId && WILAYA_MAP[request.wilayaId as keyof typeof WILAYA_MAP] === wilayaFilter);
+    
+    // Filter by compatibility (only if user is logged in and has a blood type)
+    let matchesCompatibility = true;
+    if (user && user.bloodType && compatibilityFilter) {
+      const compatibleTypes = BLOOD_TYPE_COMPATIBILITY[user.bloodType as keyof typeof BLOOD_TYPE_COMPATIBILITY] || [];
+      matchesCompatibility = compatibleTypes.includes(request.bloodType);
+    }
 
-    return matchesSearchTerm && matchesUrgency && matchesBloodType && matchesWilaya
+    return matchesSearchTerm && matchesUrgency && matchesBloodType && matchesWilaya && matchesCompatibility;
   })
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredRequests.length / requestsPerPage)
+  const indexOfLastRequest = currentPage * requestsPerPage
+  const indexOfFirstRequest = indexOfLastRequest - requestsPerPage
+  const currentRequests = filteredRequests.slice(indexOfFirstRequest, indexOfLastRequest)
+  
+  // Pagination control functions
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
+  const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages))
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1))
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, urgencyFilter, bloodTypeFilter, wilayaFilter, compatibilityFilter])
+  
   // Fonction pour obtenir la couleur du badge en fonction de l'urgence
   const getUrgencyBadgeVariant = (urgency: RequestUrgency) => {
     switch (urgency) {
@@ -285,6 +485,81 @@ export default function RequestsPage() {
     return (collected / needed) * 100
   }
 
+  // Helper function to get wilaya name from ID or fallback to provided name
+  function getWilayaName(wilayaId?: number | null, fallbackName?: string): string {
+    if (wilayaId && WILAYA_MAP[wilayaId as keyof typeof WILAYA_MAP]) {
+      return WILAYA_MAP[wilayaId as keyof typeof WILAYA_MAP];
+    }
+    return fallbackName || "Inconnu";
+  }
+
+  // Render pagination controls
+  const renderPaginationControls = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <Pagination className="mt-6">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious 
+              onClick={prevPage} 
+              className={cn(currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer")}
+            />
+          </PaginationItem>
+          
+          {Array.from({ length: totalPages }).map((_, index) => {
+            const pageNumber = index + 1;
+            
+            // Show first page, last page, current page, and pages around current page
+            if (
+              pageNumber === 1 || 
+              pageNumber === totalPages || 
+              (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
+            ) {
+              return (
+                <PaginationItem key={pageNumber}>
+                  <PaginationLink 
+                    isActive={pageNumber === currentPage}
+                    onClick={() => paginate(pageNumber)}
+                    className="cursor-pointer"
+                  >
+                    {pageNumber}
+                  </PaginationLink>
+                </PaginationItem>
+              )
+            }
+            
+            // Show ellipsis for gaps
+            if (pageNumber === 2 && currentPage > 3) {
+              return (
+                <PaginationItem key="ellipsis-start">
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )
+            }
+            
+            if (pageNumber === totalPages - 1 && currentPage < totalPages - 2) {
+              return (
+                <PaginationItem key="ellipsis-end">
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )
+            }
+            
+            return null;
+          })}
+          
+          <PaginationItem>
+            <PaginationNext 
+              onClick={nextPage} 
+              className={cn(currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer")}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    )
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-red-50">
       <main className="container mx-auto px-4 py-8">
@@ -333,29 +608,31 @@ export default function RequestsPage() {
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                     <Input
                       id="search"
-                      placeholder="Hôpital, lieu..."
+                      placeholder="Hôpital, lieu ou détails..."
                       className="pl-9"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
                 </div>
+                
                 <div className="space-y-2">
                   <label htmlFor="urgency" className="text-sm font-medium">
-                    Urgence
+                    Priorité
                   </label>
                   <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
                     <SelectTrigger id="urgency">
-                      <SelectValue placeholder="Toutes les urgences" />
+                      <SelectValue placeholder="Toutes les priorités" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Toutes les urgences</SelectItem>
+                      <SelectItem value="all">Toutes les priorités</SelectItem>
                       <SelectItem value="critical">Critique</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="low">Faible</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                
                 <div className="space-y-2">
                   <label htmlFor="bloodType" className="text-sm font-medium">
                     Groupe sanguin
@@ -374,6 +651,7 @@ export default function RequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                
                 <div className="space-y-2">
                   <label htmlFor="wilaya" className="text-sm font-medium">
                     Wilaya
@@ -384,7 +662,7 @@ export default function RequestsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Toutes les wilayas</SelectItem>
-                      {wilayas.map((wilaya) => (
+                      {wilayas.sort().map((wilaya) => (
                         <SelectItem key={wilaya} value={wilaya}>
                           {wilaya}
                         </SelectItem>
@@ -392,15 +670,47 @@ export default function RequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Compatibility filter - Only shown for logged in users */}
+                {user && user.bloodType && (
+                  <div className="md:col-span-4">
+                    <div className="flex items-center space-x-2 mt-2">
+                      <Checkbox 
+                        id="compatibility" 
+                        checked={compatibilityFilter}
+                        onCheckedChange={(checked) => setCompatibilityFilter(checked as boolean)}
+                      />
+                      <label
+                        htmlFor="compatibility"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Afficher uniquement les demandes compatibles avec mon groupe sanguin ({user.bloodType})
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Loading state */}
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-12 w-12 text-hero-red animate-spin" />
-              <span className="ml-2 text-lg">Chargement des demandes de sang...</span>
+            <div className="flex flex-col justify-center items-center py-12">
+              <Loader2 className="h-12 w-12 text-hero-red animate-spin mb-4" />
+              <span className="text-lg">Chargement des demandes de sang...</span>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col justify-center items-center py-12 bg-white rounded-lg border">
+              <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+              <p className="text-gray-700 text-lg font-medium mb-2">Problème de chargement</p>
+              <p className="text-gray-500 mb-6">{error}</p>
+              <Button 
+                onClick={handleRetry} 
+                className="flex items-center gap-2 bg-hero-red hover:bg-hero-red/90 text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Réessayer
+              </Button>
             </div>
           ) : (
             <>
@@ -411,7 +721,7 @@ export default function RequestsPage() {
                 </div>
               ) : (
                 <div className="grid gap-6 md:grid-cols-2">
-                  {filteredRequests.map((request, index) => (
+                  {currentRequests.map((request, index) => (
                     <motion.div
                       key={request.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -468,24 +778,13 @@ export default function RequestsPage() {
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Clock className="h-4 w-4" />
-                            <span>Date limite: {new Date(request.deadline).toLocaleDateString("fr-FR")}</span>
+                          <div className="text-sm text-gray-500 flex items-center">
+                            <Droplet className="h-3.5 w-3.5 mr-1 text-red-600" />
+                            <span className="font-semibold">BloodBagType: Plasma</span>
                           </div>
-
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Progression</span>
-                              <span>
-                                {request.unitsCollected}/{request.unitsNeeded} unités
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-life-green h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${getProgress(request.unitsCollected, request.unitsNeeded)}%` }}
-                              ></div>
-                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Clock className="h-4 w-4" />
+                            <span className="font-semibold">Date limite: {new Date(request.deadline).toLocaleDateString("fr-FR")}</span>
                           </div>
 
                           <p className="text-sm text-gray-600">{request.notes}</p>
@@ -526,6 +825,18 @@ export default function RequestsPage() {
                                         L'hôpital sera notifié et vous recevrez les détails pour votre rendez-vous.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
+                                    <div className="py-4">
+                                      <label htmlFor="pledgeNotes" className="text-sm font-medium">
+                                        Notes (optionnel)
+                                      </label>
+                                      <Textarea 
+                                        id="pledgeNotes" 
+                                        placeholder="Ajoutez des informations supplémentaires si nécessaire"
+                                        className="mt-1"
+                                        value={pledgeNotes}
+                                        onChange={(e) => setPledgeNotes(e.target.value)}
+                                      />
+                                    </div>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Annuler</AlertDialogCancel>
                                       <AlertDialogAction
@@ -561,39 +872,16 @@ export default function RequestsPage() {
                   ))}
                 </div>
               )}
-
-              {/* Statistiques */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Statistiques des demandes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-hero-red/10 rounded-lg">
-                      <div className="text-2xl font-bold text-hero-red">{requests.length}</div>
-                      <div className="text-sm text-gray-600">Demandes totales</div>
-                    </div>
-                    <div className="text-center p-4 bg-alert-coral/10 rounded-lg">
-                      <div className="text-2xl font-bold text-alert-coral">
-                        {requests.filter((r) => r.urgency === "critical").length}
-                      </div>
-                      <div className="text-sm text-gray-600">Demandes critiques</div>
-                    </div>
-                    <div className="text-center p-4 bg-life-green/10 rounded-lg">
-                      <div className="text-2xl font-bold text-life-green">
-                        {requests.reduce((sum, r) => sum + r.unitsCollected, 0)}
-                      </div>
-                      <div className="text-sm text-gray-600">Unités collectées</div>
-                    </div>
-                    <div className="text-center p-4 bg-trust-blue/10 rounded-lg">
-                      <div className="text-2xl font-bold text-trust-blue">
-                        {requests.reduce((sum, r) => sum + r.unitsNeeded, 0)}
-                      </div>
-                      <div className="text-sm text-gray-600">Unités nécessaires</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              
+              {/* Add pagination controls */}
+              {renderPaginationControls()}
+              
+              {/* Results counter */}
+              {filteredRequests.length > 0 && (
+                <div className="text-center text-sm text-gray-500 mt-4">
+                  Affichage de {indexOfFirstRequest + 1} à {Math.min(indexOfLastRequest, filteredRequests.length)} sur {filteredRequests.length} demandes
+                </div>
+              )}
             </>
           )}
         </motion.div>

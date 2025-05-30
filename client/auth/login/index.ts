@@ -14,9 +14,8 @@ export interface LoginRequestBuilder extends BaseRequestBuilder<LoginRequestBuil
      * Login a user.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
-     * @returns {Promise<string>}
      */
-     post(body: LoginRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<string | undefined>;
+     post(body: LoginRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
     /**
      * Login a user.
      * @param body The request body
@@ -35,9 +34,7 @@ export const LoginRequestBuilderUriTemplate = "{+baseurl}/auth/login";
 export const LoginRequestBuilderRequestsMetadata: RequestsMetadata = {
     post: {
         uriTemplate: LoginRequestBuilderUriTemplate,
-        responseBodyContentType: "application/json",
-        adapterMethodName: "sendPrimitive",
-        responseBodyFactory:  "string",
+        adapterMethodName: "sendNoResponseContent",
         requestBodyContentType: "application/json",
         requestBodySerializer: serializeLoginRequest,
         requestInformationContentSetMethod: "setContentFromParsable",

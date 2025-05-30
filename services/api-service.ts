@@ -47,3 +47,19 @@ export {
   getWilayas,
   getCommunes
 } from './api/locations/locations-service';
+
+// Import all pledge services
+export { 
+  fetchUserPledges, 
+  createPledge,  // Make sure this is exported
+  updatePledgeStatus, 
+  cancelPledge, 
+  completePledge 
+} from './api/pledges/pledges-service';
+
+// Add a deprecation warning for the old function
+export async function pledgeToDonateDeprecated(token: string, requestId: string): Promise<any> {
+  console.warn('[DEPRECATED] pledgeToDonate is deprecated, use createPledge instead');
+  const { createPledge } = await import('./api/pledges/pledges-service');
+  return createPledge(token, { bloodDonationRequestId: requestId });
+}

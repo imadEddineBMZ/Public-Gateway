@@ -1,84 +1,100 @@
 "use client"
 
-import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
-import { login as apiLogin } from "@/services/api-service" // Rename import to avoid conflict
+import { login as apiLogin } from "@/services/api-service"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { motion } from "framer-motion"
 
 export default function LoginPage() {
-  // Use setUser from auth context instead of the login method
   const { setUser } = useAuth()
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [isBrowser, setIsBrowser] = useState(false)
   
-  // Check if we're in the browser environment
-  useEffect(() => {
-    setIsBrowser(true)
-  }, [])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
     try {
-      console.log("Attempting to log in with:", { email, password });
-      // Use the API login function
-      const { token } = await apiLogin(email, password)
-
-      // Create a user object with the token
-      const user = {
-        id: "1", // You might get this from the token payload
-        name: email.split("@")[0], // Temporary name from email
+      console.log("[LOGIN] Attempting login with:", email)
+      
+      // Use enhanced login API function
+      const { token, userData, userId } = await apiLogin(email, password)
+      
+      console.log("[LOGIN] Login successful, processing user data")
+      
+      // Map blood group to string representation
+      const bloodType = userData?.donorBloodGroup ? mapBloodGroupToString(userData.donorBloodGroup) : undefined
+      
+      // Create a complete user object directly from login response
+      const completeUser = {
+        id: userId,
+        name: userData?.donorName || email.split('@')[0],
         email,
-        token, // Store the token
-        bloodType: "Unknown",
-        wilaya: "Unknown",
-        lastDonation: null,
-        eligibleDate: null,
-        badges: [],
-        points: 0,
-        notificationPreferences: {
-          enableNotifications: true,
-          subscribedHospitals: [],
-          emailNotifications: true,
-          smsNotifications: false,
-        },
-        privacySettings: {
-          isAnonymous: false,
-          showOnPublicList: true,
-        },
+        token,
+        bloodType,
+        
+        // Include all donor fields directly from the API response
+        donorCorrelationId: userData?.donorCorrelationId,
+        donorWantToStayAnonymous: userData?.donorWantToStayAnonymous || false,
+        donorExcludeFromPublicPortal: userData?.donorExcludeFromPublicPortal || false,
+        donorAvailability: userData?.donorAvailability,
+        donorContactMethod: userData?.donorContactMethod,
+        donorName: userData?.donorName,
+        donorBirthDate: userData?.donorBirthDate,
+        donorBloodGroup: userData?.donorBloodGroup,
+        donorNIN: userData?.donorNIN,
+        donorTel: userData?.donorTel,
+        donorNotesForBTC: userData?.donorNotesForBTC,
+        donorLastDonationDate: userData?.donorLastDonationDate,
+        communeId: userData?.communeId,
       }
-
-      // Update the user in context
-      setUser(user)
-
-      // Store in localStorage only on client side
-      if (isBrowser) {
-        localStorage.setItem("user", JSON.stringify(user))
+      
+      // Update user context
+      setUser(completeUser)
+      
+      // Store in localStorage for persistence
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("user", JSON.stringify(completeUser))
       }
-
-      // Redirect to dashboard
+      
+      console.log("[LOGIN] User data processed and stored, redirecting to dashboard")
+      
+      // Navigate to dashboard
       router.push("/dashboard")
-    } catch (err) {
+      
+    } catch (error) {
+      console.error("[LOGIN] Login failed:", error)
       setError("Identifiants invalides. Veuillez réessayer.")
-      console.error("Login error:", err)
     } finally {
       setIsLoading(false)
     }
+  }
+  
+  // Helper function to map numeric blood group to string
+  const mapBloodGroupToString = (bloodGroupId: number): string => {
+    const BLOOD_GROUP_MAP: Record<number, string> = {
+      1: "AB+",
+      2: "AB-",
+      3: "A+",
+      4: "A-",
+      5: "B+",
+      6: "B-",
+      7: "O+",
+      8: "O-"
+    }
+    return BLOOD_GROUP_MAP[bloodGroupId] || "Inconnu"
   }
 
   return (
@@ -189,3 +205,4 @@ export default function LoginPage() {
     </div>
   )
 }
+

@@ -4,14 +4,20 @@
 // @ts-ignore
 import { createCreateSubscriptionResponseFromDiscriminatorValue, serializeCreateSubscriptionRequest, serializeCreateSubscriptionResponse, type CreateSubscriptionRequest, type CreateSubscriptionResponse } from '../models/index.js';
 // @ts-ignore
+import { BtcRequestBuilderNavigationMetadata, type BtcRequestBuilder } from './btc/index.js';
+// @ts-ignore
 import { type WithSubscriptionItemRequestBuilder, WithSubscriptionItemRequestBuilderRequestsMetadata } from './item/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
 /**
- * Builds and executes requests for operations under /subscriptions
+ * Builds and executes requests for operations under /Subscriptions
  */
 export interface SubscriptionsRequestBuilder extends BaseRequestBuilder<SubscriptionsRequestBuilder> {
+    /**
+     * The btc property
+     */
+    get btc(): BtcRequestBuilder;
     /**
      * Gets an item from the ApiSdk.subscriptions.item collection
      * @param subscriptionId Unique identifier of the item
@@ -34,7 +40,7 @@ export interface SubscriptionsRequestBuilder extends BaseRequestBuilder<Subscrip
 /**
  * Uri template for the request builder.
  */
-export const SubscriptionsRequestBuilderUriTemplate = "{+baseurl}/subscriptions";
+export const SubscriptionsRequestBuilderUriTemplate = "{+baseurl}/Subscriptions";
 /**
  * Metadata for all the navigation properties in the request builder.
  */
@@ -42,6 +48,9 @@ export const SubscriptionsRequestBuilderNavigationMetadata: Record<Exclude<keyof
     bySubscriptionId: {
         requestsMetadata: WithSubscriptionItemRequestBuilderRequestsMetadata,
         pathParametersMappings: ["subscriptionId"],
+    },
+    btc: {
+        navigationMetadata: BtcRequestBuilderNavigationMetadata,
     },
 };
 /**

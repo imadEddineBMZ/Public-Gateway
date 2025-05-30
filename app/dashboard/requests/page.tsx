@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search } from "lucide-react"
-import { BloodRequestCard } from "@/components/blood-request-card"
+import { BloodRequestCard, BloodRequest as CardBloodRequest } from "@/components/blood-request-card"
 
 // Types pour les demandes de sang
 type RequestUrgency = "critical" | "urgent" | "standard"
@@ -14,81 +14,108 @@ type BloodRequest = {
   id: string
   hospitalName: string
   bloodType: string
+  bloodGroup: string
   urgency: RequestUrgency
+  priority: RequestUrgency
   deadline: string
   location: string
   distance: number
   notes: string
+  donationType: string
+  unitsNeeded: number
 }
 
 export default function RequestsPage() {
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
-  const [urgencyFilter, setUrgencyFilter] = useState<string>("all")
-  const [bloodTypeFilter, setBloodTypeFilter] = useState<string>("all")
-
+  const [urgencyFilter, setUrgencyFilter] = useState("all")
+  const [bloodTypeFilter, setBloodTypeFilter] = useState("all")
   // Données simulées pour les demandes de sang
   const [requests, setRequests] = useState<BloodRequest[]>([
     {
       id: "req-001",
       hospitalName: "Hôpital Central",
       bloodType: "O+",
+      bloodGroup: "O+",
       urgency: "critical",
+      priority: "critical",
       deadline: "2024-05-25",
       location: "Alger",
       distance: 2.5,
-      notes: "Besoin urgent pour une opération chirurgicale programmée demain.",
+      notes: "",
+      donationType: "",
+      unitsNeeded: 2
     },
     {
       id: "req-002",
       hospitalName: "Clinique El Azhar",
       bloodType: "A+",
+      bloodGroup: "A+",
       urgency: "urgent",
+      priority: "urgent",
       deadline: "2024-05-30",
       location: "Alger",
       distance: 4.8,
-      notes: "Patient atteint d'anémie sévère nécessitant une transfusion.",
+      notes: "",
+      donationType: "",
+      unitsNeeded: 1
     },
     {
       id: "req-003",
       hospitalName: "Hôpital Universitaire",
       bloodType: "B-",
+      bloodGroup: "B-",
       urgency: "standard",
+      priority: "standard",
       deadline: "2024-06-10",
       location: "Alger",
       distance: 7.2,
-      notes: "Reconstitution des stocks de sang pour le service d'hématologie.",
+      notes: "",
+      donationType: "",
+      unitsNeeded: 2
     },
     {
       id: "req-004",
       hospitalName: "Centre Médical Ain Naadja",
       bloodType: "AB+",
+      bloodGroup: "AB+",
       urgency: "urgent",
+      priority: "urgent",
       deadline: "2024-05-28",
       location: "Alger",
       distance: 5.1,
       notes: "Besoin pour un patient en soins intensifs suite à un accident de la route.",
+      donationType: "",
+      unitsNeeded: 1
     },
     {
       id: "req-005",
       hospitalName: "Hôpital Mustapha Pacha",
       bloodType: "O-",
+      bloodGroup: "O-",
       urgency: "critical",
+      priority: "critical",
       deadline: "2024-05-24",
       location: "Alger",
       distance: 3.7,
       notes: "Urgence pour une femme enceinte présentant des complications.",
+      donationType: "",
+      unitsNeeded: 3
     },
     {
       id: "req-006",
       hospitalName: "Clinique Privée Hydra",
       bloodType: "A-",
+      bloodGroup: "A-",
       urgency: "standard",
+      priority: "standard",
       deadline: "2024-06-05",
       location: "Alger",
       distance: 8.3,
       notes: "Besoin régulier pour le service d'oncologie.",
-    },
+      donationType: "Red Cells",
+      unitsNeeded: 3
+    }
   ])
 
   // Filtrer les demandes en fonction des critères
@@ -186,7 +213,10 @@ export default function RequestsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredRequests.map((request) => (
-            <BloodRequestCard key={request.id} request={request} />
+            <BloodRequestCard 
+              key={request.id} 
+              request={request as unknown as CardBloodRequest} 
+            />
           ))}
         </div>
       )}

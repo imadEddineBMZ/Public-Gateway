@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://cfd0-197-204-228-17.ngrok-free.app"
+      "url": "https://localhost:57679"
     }
   ],
   "paths": {
@@ -60,6 +60,38 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/Subscriptions/btc/{btcId}": {
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "operationId": "BDPublicPortalApiFeaturesSubscriptionsDeleteSubscriptionByBtcEndpoint",
+        "parameters": [
+          {
+            "name": "btcId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "401": {
             "description": "Unauthorized"
@@ -161,24 +193,15 @@
         "operationId": "BDPublicPortalApiFeaturesPledgesListPledgesEndpoint",
         "parameters": [
           {
-            "name": "evolutionStatus",
+            "name": "filter",
             "in": "query",
             "schema": {
               "nullable": true,
-              "allOf": [
+              "oneOf": [
                 {
-                  "$ref": "#/components/schemas/BloodDonationPladgeEvolutionStatus"
+                  "$ref": "#/components/schemas/BloodDonationPledgeSpecificationFilter"
                 }
               ]
-            }
-          },
-          {
-            "name": "level",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "nullable": true
             }
           }
         ],
@@ -329,15 +352,8 @@
           "x-position": 1
         },
         "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
+          "204": {
+            "description": "No Content"
           }
         }
       }
@@ -499,6 +515,37 @@
                       "type": "string"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Dashboard/stats": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "operationId": "BDPublicPortalApiFeaturesDashboardGetDashboardStatsEndpoint",
+        "parameters": [
+          {
+            "name": "loggedUserId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetDashboardStatsResponse"
                 }
               }
             }
@@ -741,23 +788,11 @@
         "operationId": "BDPublicPortalApiFeaturesBTCBTCsubsribed",
         "parameters": [
           {
-            "name": "filter",
+            "name": "paginationTake",
             "in": "query",
             "schema": {
-              "nullable": true,
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/BTCSubscribedSpecificationFilter"
-                }
-              ]
-            }
-          },
-          {
-            "name": "loggedUserId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "guid",
+              "type": "integer",
+              "format": "int32",
               "nullable": true
             }
           },
@@ -781,8 +816,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          }
+        ]
       }
     },
     "/BTC": {
@@ -1317,6 +1360,10 @@
           }
         }
       },
+      "DeleteSubscriptionByBtcRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "DeleteSubscriptionRequest": {
         "type": "object",
         "additionalProperties": false
@@ -1498,6 +1545,35 @@
       "ListPledgesRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "BloodDonationPledgeSpecificationFilter": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "evolutionStatus": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BloodDonationPladgeEvolutionStatus"
+              }
+            ]
+          },
+          "paginationTake": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "paginationSkip": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
       },
       "UpdatePledgeResponse": {
         "type": "object",
@@ -1697,14 +1773,6 @@
             "format": "int32",
             "nullable": true
           },
-          "donorWantToStayAnonymous": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "donorExcludedFromPublicPortal": {
-            "type": "boolean",
-            "nullable": true
-          },
           "donorBloodGroup": {
             "nullable": true,
             "oneOf": [
@@ -1752,6 +1820,71 @@
         "additionalProperties": false
       },
       "GetEnumsLabelsEndPointRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "GetDashboardStatsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stats": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DashboardStatsDTO"
+              }
+            ]
+          }
+        }
+      },
+      "DashboardStatsDTO": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalDonors": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalBloodRequests": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activePledges": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalBloodCenters": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalSubscriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "requestsByBloodGroup": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "requestsByWilaya": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "pledgesByStatus": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "GetDashboardStatsRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -1908,27 +2041,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "BTCSubscribedSpecificationFilter": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "applicationUserId": {
-            "type": "string",
-            "format": "guid",
-            "nullable": true
-          },
-          "paginationTake": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "paginationSkip": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          }
-        }
-      },
       "ListBloodTansfusionCentersResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -1936,10 +2048,27 @@
           "bloodTansfusionCenters": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BloodTansfusionCenterDTO"
+              "$ref": "#/components/schemas/BloodTansfusionCenterExDTO"
             }
           }
         }
+      },
+      "BloodTansfusionCenterExDTO": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BloodTansfusionCenterDTO"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "loggedUserSubscribed": {
+                "type": "boolean",
+                "nullable": true
+              }
+            }
+          }
+        ]
       },
       "ListBloodTransfusionCenterRequest": {
         "type": "object",
@@ -2031,7 +2160,7 @@
             "type": "boolean",
             "nullable": true
           },
-          "illigibilityGloups": {
+          "illigibilityGroups": {
             "type": "array",
             "nullable": true,
             "items": {

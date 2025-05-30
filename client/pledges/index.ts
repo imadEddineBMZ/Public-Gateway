@@ -43,13 +43,12 @@ export interface PledgesRequestBuilder extends BaseRequestBuilder<PledgesRequest
      toPostRequestInformation(body: CreatePledgeRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 export interface PledgesRequestBuilderGetQueryParameters {
-    evolutionStatus?: string;
-    level?: number;
+    filter?: string;
 }
 /**
  * Uri template for the request builder.
  */
-export const PledgesRequestBuilderUriTemplate = "{+baseurl}/Pledges{?evolutionStatus*,level*}";
+export const PledgesRequestBuilderUriTemplate = "{+baseurl}/Pledges{?filter*}";
 /**
  * Metadata for all the navigation properties in the request builder.
  */

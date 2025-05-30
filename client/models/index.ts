@@ -5,6 +5,11 @@
 import { type AdditionalDataHolder, type ApiError, type Parsable, type ParseNode, type SerializationWriter } from '@microsoft/kiota-abstractions';
 
 export interface ApplicationUserDTO extends Parsable {
+    firstName: any;
+    lastName: any;
+    username: string;
+    email: string;
+    wilaya: any;
     /**
      * The communeId property
      */
@@ -59,6 +64,7 @@ export interface ApplicationUserDTO extends Parsable {
     donorWantToStayAnonymous?: boolean | null;
 }
 export interface BloodDonationPledgeDTO extends Parsable {
+    bloodDonationRequest: any;
     /**
      * The applicationUserId property
      */
@@ -188,6 +194,16 @@ export interface BloodTansfusionCenterDTO extends Parsable {
      */
     wilayaId?: number | null;
 }
+export interface BloodTansfusionCenterExDTO extends AdditionalDataHolder, BloodTansfusionCenterDTO, Parsable {
+    /**
+     * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
+     */
+    additionalData?: Record<string, unknown>;
+    /**
+     * The loggedUserSubscribed property
+     */
+    loggedUserSubscribed?: boolean | null;
+}
 export interface CommuneDTO extends Parsable {
     /**
      * The applicationUsers property
@@ -279,6 +295,15 @@ export function createBloodDonationRequestDTOFromDiscriminatorValue(parseNode: P
 // @ts-ignore
 export function createBloodTansfusionCenterDTOFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoBloodTansfusionCenterDTO;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BloodTansfusionCenterExDTO}
+ */
+// @ts-ignore
+export function createBloodTansfusionCenterExDTOFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBloodTansfusionCenterExDTO;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -393,6 +418,42 @@ export function createCreateSubscriptionResponseFromDiscriminatorValue(parseNode
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DashboardStatsDTO_pledgesByStatus}
+ */
+// @ts-ignore
+export function createDashboardStatsDTO_pledgesByStatusFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDashboardStatsDTO_pledgesByStatus;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DashboardStatsDTO_requestsByBloodGroup}
+ */
+// @ts-ignore
+export function createDashboardStatsDTO_requestsByBloodGroupFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDashboardStatsDTO_requestsByBloodGroup;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DashboardStatsDTO_requestsByWilaya}
+ */
+// @ts-ignore
+export function createDashboardStatsDTO_requestsByWilayaFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDashboardStatsDTO_requestsByWilaya;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DashboardStatsDTO}
+ */
+// @ts-ignore
+export function createDashboardStatsDTOFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDashboardStatsDTO;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {DonorBloodTransferCenterSubscriptionsDTO}
  */
 // @ts-ignore
@@ -407,6 +468,15 @@ export function createDonorBloodTransferCenterSubscriptionsDTOFromDiscriminatorV
 // @ts-ignore
 export function createGetBTCsubscribedResponseFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoGetBTCsubscribedResponse;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {GetDashboardStatsResponse}
+ */
+// @ts-ignore
+export function createGetDashboardStatsResponseFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoGetDashboardStatsResponse;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -620,6 +690,58 @@ export function createUpdateUserDTOFromDiscriminatorValue(parseNode: ParseNode |
 export function createWilayaDTOFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoWilayaDTO;
 }
+export interface DashboardStatsDTO extends Parsable {
+    /**
+     * The activePledges property
+     */
+    activePledges?: number | null;
+    /**
+     * The pledgesByStatus property
+     */
+    pledgesByStatus?: DashboardStatsDTO_pledgesByStatus | null;
+    /**
+     * The requestsByBloodGroup property
+     */
+    requestsByBloodGroup?: DashboardStatsDTO_requestsByBloodGroup | null;
+    /**
+     * The requestsByWilaya property
+     */
+    requestsByWilaya?: DashboardStatsDTO_requestsByWilaya | null;
+    /**
+     * The totalBloodCenters property
+     */
+    totalBloodCenters?: number | null;
+    /**
+     * The totalBloodRequests property
+     */
+    totalBloodRequests?: number | null;
+    /**
+     * The totalDonors property
+     */
+    totalDonors?: number | null;
+    /**
+     * The totalSubscriptions property
+     */
+    totalSubscriptions?: number | null;
+}
+export interface DashboardStatsDTO_pledgesByStatus extends AdditionalDataHolder, Parsable {
+    /**
+     * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
+     */
+    additionalData?: Record<string, unknown>;
+}
+export interface DashboardStatsDTO_requestsByBloodGroup extends AdditionalDataHolder, Parsable {
+    /**
+     * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
+     */
+    additionalData?: Record<string, unknown>;
+}
+export interface DashboardStatsDTO_requestsByWilaya extends AdditionalDataHolder, Parsable {
+    /**
+     * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
+     */
+    additionalData?: Record<string, unknown>;
+}
 /**
  * The deserialization information for the current model
  * @returns {Record<string, (node: ParseNode) => void>}
@@ -698,6 +820,17 @@ export function deserializeIntoBloodTansfusionCenterDTO(bloodTansfusionCenterDTO
         "tel": n => { bloodTansfusionCenterDTO.tel = n.getStringValue(); },
         "wilaya": n => { bloodTansfusionCenterDTO.wilaya = n.getObjectValue<WilayaDTO>(createWilayaDTOFromDiscriminatorValue); },
         "wilayaId": n => { bloodTansfusionCenterDTO.wilayaId = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBloodTansfusionCenterExDTO(bloodTansfusionCenterExDTO: Partial<BloodTansfusionCenterExDTO> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        ...deserializeIntoBloodTansfusionCenterDTO(bloodTansfusionCenterExDTO),
+        "loggedUserSubscribed": n => { bloodTansfusionCenterExDTO.loggedUserSubscribed = n.getBooleanValue(); },
     }
 }
 /**
@@ -817,6 +950,50 @@ export function deserializeIntoCreateSubscriptionResponse(createSubscriptionResp
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
+export function deserializeIntoDashboardStatsDTO(dashboardStatsDTO: Partial<DashboardStatsDTO> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "activePledges": n => { dashboardStatsDTO.activePledges = n.getNumberValue(); },
+        "pledgesByStatus": n => { dashboardStatsDTO.pledgesByStatus = n.getObjectValue<DashboardStatsDTO_pledgesByStatus>(createDashboardStatsDTO_pledgesByStatusFromDiscriminatorValue); },
+        "requestsByBloodGroup": n => { dashboardStatsDTO.requestsByBloodGroup = n.getObjectValue<DashboardStatsDTO_requestsByBloodGroup>(createDashboardStatsDTO_requestsByBloodGroupFromDiscriminatorValue); },
+        "requestsByWilaya": n => { dashboardStatsDTO.requestsByWilaya = n.getObjectValue<DashboardStatsDTO_requestsByWilaya>(createDashboardStatsDTO_requestsByWilayaFromDiscriminatorValue); },
+        "totalBloodCenters": n => { dashboardStatsDTO.totalBloodCenters = n.getNumberValue(); },
+        "totalBloodRequests": n => { dashboardStatsDTO.totalBloodRequests = n.getNumberValue(); },
+        "totalDonors": n => { dashboardStatsDTO.totalDonors = n.getNumberValue(); },
+        "totalSubscriptions": n => { dashboardStatsDTO.totalSubscriptions = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDashboardStatsDTO_pledgesByStatus(dashboardStatsDTO_pledgesByStatus: Partial<DashboardStatsDTO_pledgesByStatus> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDashboardStatsDTO_requestsByBloodGroup(dashboardStatsDTO_requestsByBloodGroup: Partial<DashboardStatsDTO_requestsByBloodGroup> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDashboardStatsDTO_requestsByWilaya(dashboardStatsDTO_requestsByWilaya: Partial<DashboardStatsDTO_requestsByWilaya> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
 export function deserializeIntoDonorBloodTransferCenterSubscriptionsDTO(donorBloodTransferCenterSubscriptionsDTO: Partial<DonorBloodTransferCenterSubscriptionsDTO> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "applicationUser": n => { donorBloodTransferCenterSubscriptionsDTO.applicationUser = n.getObjectValue<ApplicationUserDTO>(createApplicationUserDTOFromDiscriminatorValue); },
@@ -834,6 +1011,16 @@ export function deserializeIntoDonorBloodTransferCenterSubscriptionsDTO(donorBlo
 export function deserializeIntoGetBTCsubscribedResponse(getBTCsubscribedResponse: Partial<GetBTCsubscribedResponse> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "btCsubscribed": n => { getBTCsubscribedResponse.btCsubscribed = n.getCollectionOfObjectValues<DonorBloodTransferCenterSubscriptionsDTO>(createDonorBloodTransferCenterSubscriptionsDTOFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoGetDashboardStatsResponse(getDashboardStatsResponse: Partial<GetDashboardStatsResponse> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "stats": n => { getDashboardStatsResponse.stats = n.getObjectValue<DashboardStatsDTO>(createDashboardStatsDTOFromDiscriminatorValue); },
     }
 }
 /**
@@ -873,7 +1060,7 @@ export function deserializeIntoListBloodDonationRequestsResponse(listBloodDonati
 // @ts-ignore
 export function deserializeIntoListBloodTansfusionCentersResponse(listBloodTansfusionCentersResponse: Partial<ListBloodTansfusionCentersResponse> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "bloodTansfusionCenters": n => { listBloodTansfusionCentersResponse.bloodTansfusionCenters = n.getCollectionOfObjectValues<BloodTansfusionCenterDTO>(createBloodTansfusionCenterDTOFromDiscriminatorValue); },
+        "bloodTansfusionCenters": n => { listBloodTansfusionCentersResponse.bloodTansfusionCenters = n.getCollectionOfObjectValues<BloodTansfusionCenterExDTO>(createBloodTansfusionCenterExDTOFromDiscriminatorValue); },
     }
 }
 /**
@@ -1091,6 +1278,12 @@ export interface GetBTCsubscribedResponse extends Parsable {
      */
     btCsubscribed?: DonorBloodTransferCenterSubscriptionsDTO[] | null;
 }
+export interface GetDashboardStatsResponse extends Parsable {
+    /**
+     * The stats property
+     */
+    stats?: DashboardStatsDTO | null;
+}
 export interface GetUserByIdEndpointResponse extends Parsable {
     /**
      * The user property
@@ -1113,7 +1306,7 @@ export interface ListBloodTansfusionCentersResponse extends Parsable {
     /**
      * The bloodTansfusionCenters property
      */
-    bloodTansfusionCenters?: BloodTansfusionCenterDTO[] | null;
+    bloodTansfusionCenters?: BloodTansfusionCenterExDTO[] | null;
 }
 export interface ListCommunesEndpointResponse extends Parsable {
     /**
@@ -1306,6 +1499,18 @@ export function serializeBloodTansfusionCenterDTO(writer: SerializationWriter, b
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
+export function serializeBloodTansfusionCenterExDTO(writer: SerializationWriter, bloodTansfusionCenterExDTO: Partial<BloodTansfusionCenterExDTO> | undefined | null = {}) : void {
+    if (bloodTansfusionCenterExDTO) {
+        serializeBloodTansfusionCenterDTO(writer, bloodTansfusionCenterExDTO)
+        writer.writeBooleanValue("loggedUserSubscribed", bloodTansfusionCenterExDTO.loggedUserSubscribed);
+        writer.writeAdditionalData(bloodTansfusionCenterExDTO.additionalData);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
 export function serializeCommuneDTO(writer: SerializationWriter, communeDTO: Partial<CommuneDTO> | undefined | null = {}) : void {
     if (communeDTO) {
         writer.writeCollectionOfObjectValues<ApplicationUserDTO>("applicationUsers", communeDTO.applicationUsers, serializeApplicationUserDTO);
@@ -1418,6 +1623,53 @@ export function serializeCreateSubscriptionResponse(writer: SerializationWriter,
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
+export function serializeDashboardStatsDTO(writer: SerializationWriter, dashboardStatsDTO: Partial<DashboardStatsDTO> | undefined | null = {}) : void {
+    if (dashboardStatsDTO) {
+        writer.writeNumberValue("activePledges", dashboardStatsDTO.activePledges);
+        writer.writeObjectValue<DashboardStatsDTO_pledgesByStatus>("pledgesByStatus", dashboardStatsDTO.pledgesByStatus, serializeDashboardStatsDTO_pledgesByStatus);
+        writer.writeObjectValue<DashboardStatsDTO_requestsByBloodGroup>("requestsByBloodGroup", dashboardStatsDTO.requestsByBloodGroup, serializeDashboardStatsDTO_requestsByBloodGroup);
+        writer.writeObjectValue<DashboardStatsDTO_requestsByWilaya>("requestsByWilaya", dashboardStatsDTO.requestsByWilaya, serializeDashboardStatsDTO_requestsByWilaya);
+        writer.writeNumberValue("totalBloodCenters", dashboardStatsDTO.totalBloodCenters);
+        writer.writeNumberValue("totalBloodRequests", dashboardStatsDTO.totalBloodRequests);
+        writer.writeNumberValue("totalDonors", dashboardStatsDTO.totalDonors);
+        writer.writeNumberValue("totalSubscriptions", dashboardStatsDTO.totalSubscriptions);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDashboardStatsDTO_pledgesByStatus(writer: SerializationWriter, dashboardStatsDTO_pledgesByStatus: Partial<DashboardStatsDTO_pledgesByStatus> | undefined | null = {}) : void {
+    if (dashboardStatsDTO_pledgesByStatus) {
+        writer.writeAdditionalData(dashboardStatsDTO_pledgesByStatus.additionalData);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDashboardStatsDTO_requestsByBloodGroup(writer: SerializationWriter, dashboardStatsDTO_requestsByBloodGroup: Partial<DashboardStatsDTO_requestsByBloodGroup> | undefined | null = {}) : void {
+    if (dashboardStatsDTO_requestsByBloodGroup) {
+        writer.writeAdditionalData(dashboardStatsDTO_requestsByBloodGroup.additionalData);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDashboardStatsDTO_requestsByWilaya(writer: SerializationWriter, dashboardStatsDTO_requestsByWilaya: Partial<DashboardStatsDTO_requestsByWilaya> | undefined | null = {}) : void {
+    if (dashboardStatsDTO_requestsByWilaya) {
+        writer.writeAdditionalData(dashboardStatsDTO_requestsByWilaya.additionalData);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
 export function serializeDonorBloodTransferCenterSubscriptionsDTO(writer: SerializationWriter, donorBloodTransferCenterSubscriptionsDTO: Partial<DonorBloodTransferCenterSubscriptionsDTO> | undefined | null = {}) : void {
     if (donorBloodTransferCenterSubscriptionsDTO) {
         writer.writeObjectValue<ApplicationUserDTO>("applicationUser", donorBloodTransferCenterSubscriptionsDTO.applicationUser, serializeApplicationUserDTO);
@@ -1435,6 +1687,16 @@ export function serializeDonorBloodTransferCenterSubscriptionsDTO(writer: Serial
 export function serializeGetBTCsubscribedResponse(writer: SerializationWriter, getBTCsubscribedResponse: Partial<GetBTCsubscribedResponse> | undefined | null = {}) : void {
     if (getBTCsubscribedResponse) {
         writer.writeCollectionOfObjectValues<DonorBloodTransferCenterSubscriptionsDTO>("btCsubscribed", getBTCsubscribedResponse.btCsubscribed, serializeDonorBloodTransferCenterSubscriptionsDTO);
+    }
+}
+/**
+ * Serializes information the current object
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeGetDashboardStatsResponse(writer: SerializationWriter, getDashboardStatsResponse: Partial<GetDashboardStatsResponse> | undefined | null = {}) : void {
+    if (getDashboardStatsResponse) {
+        writer.writeObjectValue<DashboardStatsDTO>("stats", getDashboardStatsResponse.stats, serializeDashboardStatsDTO);
     }
 }
 /**
@@ -1474,7 +1736,7 @@ export function serializeListBloodDonationRequestsResponse(writer: Serialization
 // @ts-ignore
 export function serializeListBloodTansfusionCentersResponse(writer: SerializationWriter, listBloodTansfusionCentersResponse: Partial<ListBloodTansfusionCentersResponse> | undefined | null = {}) : void {
     if (listBloodTansfusionCentersResponse) {
-        writer.writeCollectionOfObjectValues<BloodTansfusionCenterDTO>("bloodTansfusionCenters", listBloodTansfusionCentersResponse.bloodTansfusionCenters, serializeBloodTansfusionCenterDTO);
+        writer.writeCollectionOfObjectValues<BloodTansfusionCenterExDTO>("bloodTansfusionCenters", listBloodTansfusionCentersResponse.bloodTansfusionCenters, serializeBloodTansfusionCenterExDTO);
     }
 }
 /**

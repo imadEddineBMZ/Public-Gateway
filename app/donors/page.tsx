@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, MapPin, Heart, Award, Phone, Mail, UserPlus, Loader2 } from "lucide-react"
+import { Search, MapPin, Heart, Award, UserPlus, Loader2, CircleUser, PhoneCall, MessageSquare, Phone } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/components/ui/use-toast"
@@ -17,6 +17,25 @@ import {
   getAllNonAnonymousDonors,
   getWilayas 
 } from "@/services/api-service"
+
+// Blood Group Mapping
+const BLOOD_GROUP_MAP = {
+  1: "AB+",
+  2: "AB-",
+  3: "A+",
+  4: "A-",
+  5: "B+",
+  6: "B-",
+  7: "O+",
+  8: "O-"
+};
+
+// Contact Method Mapping
+const CONTACT_METHOD_MAP = {
+  1: "Appel téléphonique",
+  2: "Message texte",
+  3: "Tous les moyens"
+};
 
 // Types pour les donneurs
 type Donor = {
@@ -32,6 +51,7 @@ type Donor = {
   contactInfo: {
     email: string
     phone: string
+    contactMethod?: number // Add contact method field
   }
   privacySettings: {
     isAnonymous: boolean
@@ -65,27 +85,39 @@ export default function DonorsPage() {
         
         // Map API data to our Donor format
         if (donorsData && Array.isArray(donorsData)) {
-          const mappedDonors: Donor[] = donorsData.map(donor => ({
-            id: donor.id || "",
-            name: donor.firstName && donor.lastName 
-              ? `${donor.firstName} ${donor.lastName}`
-              : donor.username || "Donneur anonyme",
-            bloodType: donor.donorBloodGroup || "?",
-            wilaya: donor.wilaya?.name || "Non spécifiée",
-            lastDonation: donor.lastDonatedAt || null,
-            totalDonations: donor.donorDonationCount || 0,
-            isEligible: donor.donorCanDonateNow || false,
-            badges: getBadges(donor.donorDonationCount || 0),
-            avatar: donor.profilePictureUrl || undefined,
-            contactInfo: {
-              email: donor.email || "",
-              phone: donor.phoneNumber || "",
-            },
-            privacySettings: {
-              isAnonymous: donor.donorWantToStayAnonymous || false,
-              showOnPublicList: !donor.donorExcludedFromPublicPortal,
-            },
-          }))
+          const mappedDonors: Donor[] = donorsData.map((donor, index) => {
+            // Create a stable ID that won't change between renders
+            const stableId = donor.id || 
+                            `donor-${donor.username || ''}${donor.email || ''}${index}`;
+            
+            // Map blood group numeric value to string representation
+            const bloodGroupString = donor.donorBloodGroup 
+              ? BLOOD_GROUP_MAP[donor.donorBloodGroup as keyof typeof BLOOD_GROUP_MAP] || "?"
+              : "?";
+            
+            return {
+              id: stableId,
+              name: donor.firstName && donor.lastName 
+                ? `${donor.firstName} ${donor.lastName}`
+                : donor.username || "Donneur anonyme",
+              bloodType: bloodGroupString,
+              wilaya: donor.wilaya?.name || "Non spécifiée",
+              lastDonation: donor.donorLastDonationDate || null,
+              totalDonations: donor.donorDonationCount || 0,
+              isEligible: donor.donorCanDonateNow || false,
+              badges: getBadges(donor.donorDonationCount || 0),
+              avatar: donor.profilePictureUrl || undefined,
+              contactInfo: {
+                email: donor.email || "",
+                phone: donor.donorTel || "", // Changed from phoneNumber to donorTel
+                contactMethod: donor.donorContactMethod || null,
+              },
+              privacySettings: {
+                isAnonymous: donor.donorWantToStayAnonymous || false,
+                showOnPublicList: !donor.donorExcludedFromPublicPortal,
+              },
+            };
+          })
           
           setDonors(mappedDonors)
         } else {
@@ -107,7 +139,7 @@ export default function DonorsPage() {
         console.error("Error fetching data:", error)
         toast({
           title: "Erreur de connexion",
-          description: "Impossible de charger les donneurs. Veuillez réessayer plus tard.",
+          description: "Impossible de charger la liste des donneurs. Veuillez réessayer plus tard.",
           variant: "destructive",
         })
       } finally {
@@ -157,12 +189,36 @@ export default function DonorsPage() {
       : donor.name
   }
 
-  const getInitials = (donor: Donor) => {
+  // Update the getInitials function to better handle various name formats
+  const getInitials = (donor: Donor): string => {
+    if (!donor.name || donor.name.trim() === "") {
+      return "?";
+    }
+    
+    // Split by spaces and get first character of each part
     return donor.name
       .split(" ")
-      .map((n) => n[0])
+      .filter(part => part.length > 0)
+      .map(part => part[0].toUpperCase())
       .join("")
+      .substring(0, 2); // Limit to 2 characters
   }
+
+  // Format Algerian phone number to make it more readable
+  const formatPhoneNumber = (phone: string): string => {
+    if (!phone || phone.length < 4) return phone;
+    
+    // Format as XX XX XX XX XX (common Algerian format)
+    return phone.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
+  };
+
+  // Mask phone number for privacy when user is not authenticated
+  const maskPhoneNumber = (phone: string): string => {
+    if (!phone || phone.length < 4) return "***";
+    
+    // Keep first 2 digits and last 2 digits visible
+    return phone.replace(/^(\d{2}).*(\d{2})$/, "$1 ** ** ** $2");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-red-50">
@@ -197,11 +253,10 @@ export default function DonorsPage() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-2xl mx-auto">
                 <div className="flex items-center gap-2 text-green-800">
                   <Heart className="h-5 w-5" />
-                  <span className="font-medium">Bienvenue dans la communauté, {user.name.split(" ")[0]}!</span>
+                  <span className="font-medium">Bienvenue, {user.name}</span>
                 </div>
                 <p className="text-green-700 text-sm mt-1">
-                  Vous avez accès à toutes les informations des donneurs et pouvez gérer vos préférences depuis votre
-                  tableau de bord.
+                  Vous avez accès aux informations de contact complètes des donneurs.
                 </p>
               </div>
             )}
@@ -211,7 +266,7 @@ export default function DonorsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Rechercher des donneurs</CardTitle>
-              <CardDescription>Filtrez les donneurs par nom, groupe sanguin ou wilaya</CardDescription>
+              <CardDescription>Filtrez par groupe sanguin, wilaya ou recherchez par nom</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
@@ -239,9 +294,9 @@ export default function DonorsPage() {
                       <SelectValue placeholder="Tous les groupes" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous les groupes</SelectItem>
-                      {bloodTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
+                      <SelectItem key="all-blood-types" value="all">Tous les groupes</SelectItem>
+                      {bloodTypes.map((type, index) => (
+                        <SelectItem key={`blood-type-${type}-${index}`} value={type}>
                           {type}
                         </SelectItem>
                       ))}
@@ -257,9 +312,9 @@ export default function DonorsPage() {
                       <SelectValue placeholder="Toutes les wilayas" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Toutes les wilayas</SelectItem>
-                      {wilayas.map((wilaya) => (
-                        <SelectItem key={wilaya} value={wilaya}>
+                      <SelectItem key="all-wilayas" value="all">Toutes les wilayas</SelectItem>
+                      {wilayas.map((wilaya, index) => (
+                        <SelectItem key={`wilaya-${wilaya}-${index}`} value={wilaya}>
                           {wilaya}
                         </SelectItem>
                       ))}
@@ -285,104 +340,140 @@ export default function DonorsPage() {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredDonors.map((donor, index) => (
-                    <motion.div
-                      key={donor.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.1 }}
-                    >
-                      <Card className="hover:shadow-lg transition-shadow duration-300">
-                        <CardHeader className="pb-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={donor.avatar || "/placeholder.svg"} alt={getDisplayName(donor)} />
-                              <AvatarFallback className="bg-gradient-to-br from-hero-red to-red-600 text-white">
-                                {getInitials(donor)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <h3 className="font-semibold">{getDisplayName(donor)}</h3>
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <MapPin className="h-3.5 w-3.5" />
-                                <span>{donor.wilaya}</span>
+                  {filteredDonors.map((donor, donorIndex) => {
+                    // Generate a highly unique key for each donor card
+                    const donorKey = `donor-${donor.id || ''}-${donor.bloodType || ''}-${donorIndex}`;
+                    
+                    return (
+                      <motion.div
+                        key={donorKey}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <Card className="hover:shadow-lg transition-shadow duration-300">
+                          {/* Card content */}
+                          <CardHeader className="pb-4">
+                            <div className="flex items-center gap-3">
+                              {donor.avatar ? (
+                                <Avatar className="h-12 w-12">
+                                  <AvatarImage src={donor.avatar} alt={getDisplayName(donor)} />
+                                  <AvatarFallback className="bg-gradient-to-br from-hero-red to-red-600 text-white">
+                                    {getInitials(donor)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ) : (
+                                <CircleUser className="h-12 w-12 text-gray-400" />
+                              )}
+                              <div className="flex-1">
+                                <h3 className="font-semibold">{getDisplayName(donor)}</h3>
+                                <div className="flex items-center gap-2 text-sm text-gray-500">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  <span>{donor.wilaya}</span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-hero-red font-semibold">
+                                  {donor.bloodType}
+                                </div>
+                                <Badge variant={donor.isEligible ? "default" : "secondary"} className="text-xs">
+                                  {donor.isEligible ? "Éligible" : "Non éligible"}
+                                </Badge>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-hero-red font-semibold">
-                                {donor.bloodType}
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="grid grid-cols-1 gap-4 text-sm">
+                              {/* Remove the donations count and only show the last donation date */}
+                              <div>
+                                <span className="text-gray-500">Dernier don:</span>
+                                <p className="font-semibold">
+                                  {donor.lastDonation ? 
+                                    new Date(donor.lastDonation).toLocaleDateString("fr-FR", {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }).replace(",", " à") : 
+                                    "Non disponible"}
+                                </p>
                               </div>
-                              <Badge variant={donor.isEligible ? "default" : "secondary"} className="text-xs">
-                                {donor.isEligible ? "Éligible" : "Non éligible"}
-                              </Badge>
                             </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Dons totaux:</span>
-                              <p className="font-semibold">{donor.totalDonations}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Dernier don:</span>
-                              <p className="font-semibold">
-                                {donor.lastDonation ? new Date(donor.lastDonation).toLocaleDateString("fr-FR") : "Aucun"}
-                              </p>
-                            </div>
-                          </div>
 
-                          {/* Contact Information - Enhanced visibility for authenticated users */}
-                          <div className="space-y-2 pt-2 border-t border-gray-100">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Mail className="h-3.5 w-3.5" />
-                              <span className="truncate">
-                                {user
-                                  ? donor.contactInfo.email
-                                  : donor.contactInfo.email.replace(/(.{2}).*(@.*)/, "$1***$2")}
-                              </span>
+                            {/* Contact Information - Enhanced visibility for authenticated users */}
+                            <div className="space-y-2 pt-2 border-t border-gray-100">
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                
+                                <span className="truncate">
+                                  {user
+                                    ? donor.contactInfo.email
+                                    : donor.contactInfo.email.replace(/(.{2}).*(@.*)/, "$1***$2")}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <Phone className="h-3.5 w-3.5 text-gray-400" />
+                                <span>
+                                  {user
+                                    ? formatPhoneNumber(donor.contactInfo.phone || "")
+                                    : maskPhoneNumber(donor.contactInfo.phone || "")}
+                                </span>
+                              </div>
+
+                              {/* Display contact method preference for authenticated users */}
+                              {user && donor.contactInfo.contactMethod && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                                  {donor.contactInfo.contactMethod === 1 ? (
+                                    <PhoneCall className="h-3.5 w-3.5 text-blue-500" />
+                                  ) : donor.contactInfo.contactMethod === 2 ? (
+                                    <MessageSquare className="h-3.5 w-3.5 text-green-500" />
+                                  ) : (
+                                    <div className="flex">
+                                      <PhoneCall className="h-3.5 w-3.5 text-purple-500 mr-1" />
+                                      <MessageSquare className="h-3.5 w-3.5 text-purple-500" />
+                                    </div>
+                                  )}
+                                  <span className="text-xs font-medium">
+                                    Préfère: {CONTACT_METHOD_MAP[donor.contactInfo.contactMethod as keyof typeof CONTACT_METHOD_MAP] || "Non spécifié"}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {!user && (
+                                <p className="text-xs text-gray-500 italic">
+                                  Connectez-vous pour voir les informations complètes
+                                </p>
+                              )}
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Phone className="h-3.5 w-3.5" />
-                              <span>
-                                {user
-                                  ? donor.contactInfo.phone
-                                  : donor.contactInfo.phone.replace(/(.{4}).*(.{2})/, "$1***$2")}
-                              </span>
-                            </div>
-                            {!user && (
-                              <p className="text-xs text-gray-500 italic">
-                                Connectez-vous pour voir les informations complètes
-                              </p>
+
+                            {/* Fix badges rendering with better keys */}
+                            {donor.badges.length > 0 && (
+                              <div>
+                                <span className="text-sm text-gray-500 mb-2 block">Badges:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {donor.badges.slice(0, 2).map((badge, badgeIndex) => (
+                                    <Badge
+                                      key={`${donorKey}-badge-${badge}-${badgeIndex}`}
+                                      variant="outline"
+                                      className="text-xs bg-gold-badge/20 text-trust-blue border-gold-badge/30"
+                                    >
+                                      <Award className="h-3 w-3 mr-1" />
+                                      {badge}
+                                    </Badge>
+                                  ))}
+                                  {donor.badges.length > 2 && (
+                                    <Badge key={`${donorKey}-badge-more`} variant="outline" className="text-xs">
+                                      +{donor.badges.length - 2}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
                             )}
-                          </div>
-
-                          {donor.badges.length > 0 && (
-                            <div>
-                              <span className="text-sm text-gray-500 mb-2 block">Badges:</span>
-                              <div className="flex flex-wrap gap-1">
-                                {donor.badges.slice(0, 2).map((badge, badgeIndex) => (
-                                  <Badge
-                                    key={badgeIndex}
-                                    variant="outline"
-                                    className="text-xs bg-gold-badge/20 text-trust-blue border-gold-badge/30"
-                                  >
-                                    <Award className="h-3 w-3 mr-1" />
-                                    {badge}
-                                  </Badge>
-                                ))}
-                                {donor.badges.length > 2 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{donor.badges.length - 2}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -408,8 +499,10 @@ export default function DonorsPage() {
                       <div className="text-sm text-gray-600">Dons totaux</div>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-2xl font-bold text-hope-purple">{new Set(donors.map((d) => d.wilaya)).size}</div>
-                      <div className="text-sm text-gray-600">Wilayas couvertes</div>
+                      <div className="text-2xl font-bold text-purple-600">
+                        {donors.filter((d) => d.lastDonation).length}
+                      </div>
+                      <div className="text-sm text-gray-600">Donneurs actifs</div>
                     </div>
                   </div>
                 </CardContent>

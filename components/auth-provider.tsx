@@ -1,243 +1,224 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/use-toast";
+import { ApplicationUserDTO } from "@/client/models";
+import { createAuthenticatedClient } from "@/services/api/core";
 
-import { createContext, useContext, useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
-
-// Update the User type to include subscription management
+// Enhanced User type with all donor fields
 type User = {
-  id: string
-  name: string
-  email: string
-  bloodType: string,
-  token?: string // Optional token for authenticated requests
-  wilaya: string
-  lastDonation: string | null
-  eligibleDate: string | null
-  points: number
-  notificationPreferences: {
-    enableNotifications: boolean
-    subscribedHospitals: string[]
-    emailNotifications: boolean
-    smsNotifications: boolean
-  }
-  privacySettings: {
-    isAnonymous: boolean
-    showOnPublicList: boolean
-  }
-}
+  id: string;
+  name: string;
+  email: string;
+  token: string;
+  bloodType?: string;
+  wilaya?: string;
+  
+  // Donor specific fields
+  donorCorrelationId?: string;
+  donorWantToStayAnonymous?: boolean;
+  donorExcludeFromPublicPortal?: boolean;
+  donorAvailability?: number;
+  donorContactMethod?: number;
+  donorName?: string;
+  donorBirthDate?: string;
+  donorBloodGroup?: number;
+  donorNIN?: string;
+  donorTel?: string;
+  donorNotesForBTC?: string;
+  donorLastDonationDate?: string;
+  communeId?: number;
+} | null;
 
-// Update the AuthContextType to include subscription management
 type AuthContextType = {
-  user: User | null
-  isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (userData: Partial<User> & { password: string }) => Promise<void>
-  logout: () => void
-  updateNotificationPreferences: (preferences: User["notificationPreferences"]) => void
-  updatePrivacySettings: (settings: User["privacySettings"]) => void
-  subscribeToHospital: (hospitalId: string) => void
-  unsubscribeFromHospital: (hospitalId: string) => void
-  setUser: (user: User) => void // Add this
-}
+  user: User;
+  setUser: (user: User) => void;
+  logout: () => void;
+  isLoading: boolean;
+  fetchUserData: (userId: string, token: string) => Promise<void>;
+};
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  setUser: () => {},
+  logout: () => {},
+  isLoading: true,
+  fetchUserData: async () => {}
+});
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
-  const pathname = usePathname()
+export const useAuth = () => useContext(AuthContext);
 
-  useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-    setIsLoading(false)
-  }, [])
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    // Redirect logic
-    if (!isLoading) {
-      // Public paths that don't require authentication
-      const publicPaths = ["/", "/login", "/register", "/donors", "/hospitals", "/requests"]
-      const isPublicPath = publicPaths.includes(pathname)
-
-      // Dashboard paths that require authentication
-      const isDashboardPath = pathname.startsWith("/dashboard")
-
-      if (!user && isDashboardPath) {
-        router.push("/login")
-      } else if (user && (pathname === "/login" || pathname === "/register")) {
-        router.push("/dashboard")
-      }
-    }
-  }, [user, isLoading, pathname, router])
-
-  const login = async (email: string, password: string) => {
-    setIsLoading(true)
+  // Function to fetch complete user data from API
+  const fetchUserData = async (userId: string, token: string) => {
+    console.log(`[AUTH] Starting fetchUserData for userId: ${userId}`);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Mock user data
-      const mockUser: User = {
-        id: "1",
-        name: "John Doe",
-        email,
-        bloodType: "O+",
-        wilaya: "Alger",
-        lastDonation: "2024-03-15",
-        eligibleDate: "2024-06-15",
-        badges: ["First Save"],
-        points: 100,
-        notificationPreferences: {
-          enableNotifications: true,
-          subscribedHospitals: [],
-          emailNotifications: true,
-          smsNotifications: false,
-        },
-        privacySettings: {
-          isAnonymous: false,
-          showOnPublicList: true,
-        },
+      // Create authenticated client with the token
+      const client = createAuthenticatedClient(token);
+      
+      console.log(`[AUTH] Fetching user data from /user endpoint with userId: ${userId}`);
+      // Fetch user data from API
+      const response = await client.user.get({
+        queryParameters: {
+          userId: userId
+        }
+      });
+      
+      console.log(`[AUTH] User data response received:`, response);
+      
+      if (response?.user) {
+        // Explicitly type the user data from response
+        const userData: ApplicationUserDTO = response.user;
+        
+        console.log(`[AUTH] Processing user data:`, userData);
+        
+        // Use donorCorrelationId as the primary ID when available
+        const primaryId = userData.donorCorrelationId || userId;
+        
+        // Create a complete user object with API data and token
+        const completeUser: User = {
+          id: primaryId,
+          name: userData.firstName && userData.lastName 
+            ? `${userData.firstName} ${userData.lastName}`
+            : userData.username || "Utilisateur",
+          email: userData.email || "",
+          token: token,
+          
+          // Use numeric donorBloodGroup for blood type
+          bloodType: userData.donorBloodGroup 
+            ? mapBloodGroupToString(userData.donorBloodGroup) 
+            : undefined,
+          donorBloodGroup: userData.donorBloodGroup || undefined,
+          
+          wilaya: userData.wilaya?.name,
+          
+          // Map all donor fields from the API response
+          donorCorrelationId: userData.donorCorrelationId || undefined,
+          donorWantToStayAnonymous: userData.donorWantToStayAnonymous || false,
+          donorExcludeFromPublicPortal: userData.donorExcludeFromPublicPortal || false,
+          donorAvailability: userData.donorAvailability || undefined,
+          donorContactMethod: userData.donorContactMethod || undefined,
+          donorName: userData.donorName || undefined,
+          donorBirthDate: userData.donorBirthDate ? new Date(userData.donorBirthDate).toISOString() : undefined,
+          donorNIN: userData.donorNIN || undefined,
+          donorTel: userData.donorTel || undefined,
+          donorNotesForBTC: userData.donorNotesForBTC || undefined,
+          donorLastDonationDate: userData.donorLastDonationDate ? new Date(userData.donorLastDonationDate).toISOString() : undefined,
+          communeId: userData.communeId || undefined,
+        };
+        
+        console.log(`[AUTH] User data processing complete. Updated user object:`, completeUser);
+        
+        // Update state and localStorage
+        setUser(completeUser);
+        
+        if (typeof window !== 'undefined') {
+          console.log(`[AUTH] Storing user data in localStorage`);
+          localStorage.setItem("user", JSON.stringify(completeUser));
+        }
+        
+        console.log(`[AUTH] fetchUserData completed successfully`);
+      } else {
+        console.log(`[AUTH] No user data found in the response`);
       }
-
-      setUser(mockUser)
-      localStorage.setItem("user", JSON.stringify(mockUser))
-      router.push("/dashboard")
     } catch (error) {
-      console.error("Login failed:", error)
-      throw error
-    } finally {
-      setIsLoading(false)
+      console.error("[AUTH] Error fetching user data:", error);
+      toast({
+        title: "Erreur de chargement",
+        description: "Impossible de charger vos informations complètes. Certaines fonctionnalités pourraient être limitées.",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
-  const register = async (userData: Partial<User> & { password: string }) => {
-    setIsLoading(true)
+  // Helper function to map numeric blood group to string
+  const mapBloodGroupToString = (bloodGroupId: number): string => {
+    const BLOOD_GROUP_MAP: Record<number, string> = {
+      1: "AB+",
+      2: "AB-",
+      3: "A+",
+      4: "A-",
+      5: "B+",
+      6: "B-",
+      7: "O+",
+      8: "O-"
+    };
+    return BLOOD_GROUP_MAP[bloodGroupId] || "Inconnu";
+  };
+
+  // Check for stored user data on component mount
+  useEffect(() => {
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Calculate eligible date if lastDonation is provided
-      let eligibleDate = null
-      if (userData.lastDonation) {
-        const lastDonationDate = new Date(userData.lastDonation)
-        eligibleDate = new Date(lastDonationDate)
-        eligibleDate.setMonth(eligibleDate.getMonth() + 3)
-        eligibleDate = eligibleDate.toISOString().split("T")[0]
+      // Only access localStorage on the client side
+      if (typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
       }
-
-      // Mock user data
-      const mockUser: User = {
-        id: "1",
-        name: userData.name || "New User",
-        email: userData.email || "",
-        bloodType: userData.bloodType || "Unknown",
-        wilaya: userData.wilaya || "Unknown",
-        lastDonation: userData.lastDonation || null,
-        eligibleDate,
-        badges: [],
-        points: 0,
-        notificationPreferences: {
-          enableNotifications: true,
-          subscribedHospitals: [],
-          emailNotifications: true,
-          smsNotifications: false,
-        },
-        privacySettings: {
-          isAnonymous: false,
-          showOnPublicList: true,
-        },
+    } catch (e) {
+      console.error("Failed to parse stored user data", e);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("user");
       }
-
-      setUser(mockUser)
-      localStorage.setItem("user", JSON.stringify(mockUser))
-      router.push("/dashboard")
-    } catch (error) {
-      console.error("Registration failed:", error)
-      throw error
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  }, []);
 
-  const updateNotificationPreferences = (preferences: User["notificationPreferences"]) => {
-    if (user) {
-      const updatedUser = { ...user, notificationPreferences: preferences }
-      setUser(updatedUser)
-      localStorage.setItem("user", JSON.stringify(updatedUser))
-    }
-  }
-
-  const updatePrivacySettings = (settings: User["privacySettings"]) => {
-    if (user) {
-      const updatedUser = { ...user, privacySettings: settings }
-      setUser(updatedUser)
-      localStorage.setItem("user", JSON.stringify(updatedUser))
-    }
-  }
-
+  // Enhanced logout function with logging
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem("user")
-    router.push("/login")
-  }
-
-  // Add the new methods to the provider
-  const subscribeToHospital = (hospitalId: string) => {
-    if (user) {
-      const updatedPreferences = {
-        ...user.notificationPreferences,
-        subscribedHospitals: [...user.notificationPreferences.subscribedHospitals, hospitalId],
+    console.log("[AUTH] Starting logout process");
+    try {
+      if (typeof window !== 'undefined') {
+        console.log("[AUTH] Clearing user state and localStorage");
+        // Clear user from state
+        setUser(null);
+        
+        // Remove all auth-related items from localStorage
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("auth_state");
+        
+        // Clear any session storage items too
+        sessionStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        
+        console.log("[AUTH] Local storage cleared");
+        
+        // Show success toast
+        toast({
+          title: "Déconnexion réussie",
+          description: "Vous avez été déconnecté avec succès.",
+          className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
+        });
+        
+        console.log("[AUTH] Redirecting to home page");
+        // Redirect to home or login page
+        router.push('/');
+        
+        console.log("[AUTH] Logout completed successfully");
       }
-      const updatedUser = { ...user, notificationPreferences: updatedPreferences }
-      setUser(updatedUser)
-      localStorage.setItem("user", JSON.stringify(updatedUser))
+    } catch (error) {
+      console.error("[AUTH] Error during logout:", error);
+      toast({
+        title: "Erreur lors de la déconnexion",
+        description: "Une erreur est survenue lors de la déconnexion. Veuillez réessayer.",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
-  const unsubscribeFromHospital = (hospitalId: string) => {
-    if (user) {
-      const updatedPreferences = {
-        ...user.notificationPreferences,
-        subscribedHospitals: user.notificationPreferences.subscribedHospitals.filter((id) => id !== hospitalId),
-      }
-      const updatedUser = { ...user, notificationPreferences: updatedPreferences }
-      setUser(updatedUser)
-      localStorage.setItem("user", JSON.stringify(updatedUser))
-    }
-  }
-
-  // Update the provider value
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        login,
-        register,
-        logout,
-        updateNotificationPreferences,
-        updatePrivacySettings,
-        subscribeToHospital,
-        unsubscribeFromHospital,
-        setUser, // Add this
-      }}
-    >
+    <AuthContext.Provider value={{ user, setUser, logout, isLoading, fetchUserData }}>
       {children}
     </AuthContext.Provider>
-  )
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
+  );
+};

@@ -1,0 +1,31 @@
+
+------ donors -------
+les filttre par communes  (it can wait)
+les filtres par willayas
+groupe du sang (enums)
+disponibilite ( enums)
+excluded from public portail
+{
+  "communeId": 0,
+  "wilayaId": 0,
+
+  "donorBloodGroup": 1,
+  "donorContactMethod": 1,
+  "paginationTake": 0,
+  "paginationSkip": 0
+}
+----------------------
+---------BTC----------
+filtres willaya
+subscriptions only 
+---------------------
+-------Requests --------
+filtres : BloodType 
+Bloodbag type
+willaya
+urgence
+subscribed only 
+eligibility only 
+pagination
+-------------------------
+
