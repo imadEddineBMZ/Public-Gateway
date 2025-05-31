@@ -1,5 +1,6 @@
 import { anonymousClient } from '../core';
 import { ApplicationUserDTO } from '@/client/models';
+import { useAuth } from '../../../components/auth-provider';
 
 /**
  * Login user with email and password
@@ -25,6 +26,21 @@ export async function login(email: string, password: string): Promise<{ token: s
     // Parse the actual JSON response
     const data = await response.json();
     console.log("[AUTH SERVICE] Raw login response:", data);
+    
+    // Store the token and user info
+    const userData = {
+      id: data.userId,
+      name: data.userDTO?.name || email.split('@')[0],
+      email: email,
+      token: data.jwToken,
+    };
+    
+    // Save to localStorage
+    localStorage.setItem("user", JSON.stringify(userData));
+    
+    // Save token and continue without fetchCompleteUserData for now
+    // We'll implement the complete profile fetch in the auth provider later
+    localStorage.setItem("token", data.jwToken);
     
     // Return the properly structured response
     return { 
@@ -60,12 +76,36 @@ function extractUserIdFromToken(token: string): string {
 /**
  * Register a new user
  */
-export async function register(userData: any) {
+export async function register(userData: any): Promise<any> {
   try {
-    const response = await anonymousClient.auth.register.post(userData);
+    console.log("[AUTH-SERVICE] Registering user with data:", userData);
+    
+    // Create a client instance
+    const client = anonymousClient;
+    
+    // Add confirmPassword if it's missing but password exists
+    if (userData.password && !userData.confirmPassword) {
+      userData.confirmPassword = userData.password;
+    }
+    
+    // Format request according to API expectations
+    const registerRequest = {
+      registerUserRequest: userData
+    };
+    
+    // Call the API with the properly structured request
+    const response = await client.auth.register.post(userData);
+    
+    console.log("[AUTH-SERVICE] Registration successful:", response);
     return response;
-  } catch (error) {
-    console.error('Registration error:', error);
+  } catch (error: any) {
+    console.error("[AUTH-SERVICE] Registration error details:", error);
+    
+    // Extract and log specific validation errors
+    if (error.responseStatusCode === 400 && error.errors) {
+      console.error("[AUTH-SERVICE] Validation errors:", JSON.stringify(error.errors, null, 2));
+    }
+    
     throw error;
   }
 }

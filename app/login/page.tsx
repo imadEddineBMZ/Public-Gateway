@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
-import { login as apiLogin } from "@/services/api-service"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AlertCircle, Loader2 } from "lucide-react"
@@ -14,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { motion } from "framer-motion"
 
 export default function LoginPage() {
-  const { setUser } = useAuth()
+  const { login } = useAuth() // Get login function from auth provider
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -22,94 +21,42 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    
     try {
-      console.log("[LOGIN] Attempting login with:", email)
+      console.log("[LOGIN] Attempting login with:", email);
       
-      // Use enhanced login API function
-      const { token, userData, userId } = await apiLogin(email, password)
+      // Use the login function from AuthProvider
+      // This will set the name field to donorName when available
+      const success = await login(email, password);
       
-      console.log("[LOGIN] Login successful, processing user data")
-      
-      // Map blood group to string representation
-      const bloodType = userData?.donorBloodGroup ? mapBloodGroupToString(userData.donorBloodGroup) : undefined
-      
-      // Create a complete user object directly from login response
-      const completeUser = {
-        id: userId,
-        name: userData?.donorName || email.split('@')[0],
-        email,
-        token,
-        bloodType,
+      if (success) {
+        // At this point, the user object has name and donorName synchronized
+        console.log("[LOGIN] Login successful, redirecting to dashboard");
         
-        // Add all the donor-specific fields
-        donorCorrelationId: userData?.donorCorrelationId,
-        donorWantToStayAnonymous: userData?.donorWantToStayAnonymous || false,
-        donorExcludeFromPublicPortal: userData?.donorExcludeFromPublicPortal || false,
-        donorAvailability: userData?.donorAvailability,
-        donorContactMethod: userData?.donorContactMethod,
-        donorName: userData?.donorName,
-        donorBirthDate: userData?.donorBirthDate,
-        donorBloodGroup: userData?.donorBloodGroup,
-        donorNIN: userData?.donorNIN,
-        donorTel: userData?.donorTel,
-        donorNotesForBTC: userData?.donorNotesForBTC,
-        donorLastDonationDate: userData?.donorLastDonationDate,
-        communeId: userData?.communeId,
+        // Ensure user data has been properly loaded
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+        console.log("[LOGIN] User data loaded:", {
+          id: userData.id,
+          name: userData.name,
+          donorName: userData.donorName,
+          wilaya: userData.wilaya,
+          wilayaId: userData.wilayaId,
+          communeId: userData.communeId
+        });
         
-        // Add default notification and privacy settings
-        notificationPreferences: {
-          enableNotifications: true,
-          emailNotifications: true,
-          smsNotifications: true,
-          subscribedHospitals: []
-        },
-        privacySettings: {
-          showOnPublicList: !userData?.donorExcludeFromPublicPortal,
-          isAnonymous: userData?.donorWantToStayAnonymous || false
-        },
-        
-        // Add wilaya information if available
-        wilaya: userData?.wilaya?.name,
+        router.push('/dashboard');
+      } else {
+        setError("Identifiants invalides. Veuillez réessayer.");
       }
-      
-      // Update user context
-      setUser(completeUser)
-      
-      // Store in localStorage for persistence
-      if (typeof window !== 'undefined') {
-        localStorage.setItem("user", JSON.stringify(completeUser))
-      }
-      
-      console.log("[LOGIN] User data processed and stored, redirecting to dashboard")
-      
-      // Navigate to dashboard
-      router.push("/dashboard")
-      
     } catch (error) {
-      console.error("[LOGIN] Login failed:", error)
-      setError("Identifiants invalides. Veuillez réessayer.")
+      console.error("[LOGIN] Login failed:", error);
+      setError("Une erreur est survenue lors de la connexion. Veuillez réessayer.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
-  
-  // Helper function to map numeric blood group to string
-  const mapBloodGroupToString = (bloodGroupId: number): string => {
-    const BLOOD_GROUP_MAP: Record<number, string> = {
-      1: "AB+",
-      2: "AB-",
-      3: "A+",
-      4: "A-",
-      5: "B+",
-      6: "B-",
-      7: "O+",
-      8: "O-"
-    }
-    return BLOOD_GROUP_MAP[bloodGroupId] || "Inconnu"
   }
 
   return (

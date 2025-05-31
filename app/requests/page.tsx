@@ -43,6 +43,7 @@ import {
   PaginationPrevious 
 } from "@/components/ui/pagination"
 import { Textarea } from "@/components/ui/textarea"
+import { AuthRequiredDialog } from "@/components/auth-required-dialog"
 
 // Types pour les demandes de sang
 type RequestUrgency = "critical" | "urgent" | "standard"
@@ -107,6 +108,7 @@ export default function RequestsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [requestsPerPage] = useState(6) // Number of requests per page
   const [pledgeNotes, setPledgeNotes] = useState("") // State for pledge notes
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
 
@@ -325,12 +327,9 @@ export default function RequestsPage() {
   // Handle pledge to donate
   const handlePledge = async (requestId: string) => {
     if (!user?.token) {
-      toast({
-        title: "Connexion requise",
-        description: "Vous devez être connecté pour vous engager à donner du sang.",
-        variant: "destructive",
-      })
-      return
+      // Show the auth required dialog instead of just a toast
+      setShowAuthDialog(true);
+      return;
     }
 
     try {

@@ -1,5 +1,5 @@
 "use client"
-
+import { unsubscribeFromBloodTansfusionCenter } from "@/services/api/bloodDonation/blood-transfusion-service"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,7 @@ import {
   Phone,
   MessageSquare,
   Loader2,
+  MapPin
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
@@ -143,11 +144,12 @@ export default function NotificationsPage() {
     
     setLoadingCenters(true)
     try {
-      const apiCenters = await getSubscribedBloodTansfusionCenters(user.token)
+      // Now passing the required query parameters
+      const apiCenters = await getSubscribedBloodTansfusionCenters(user.token, 1, 50)
       console.log("Fetched subscribed centers:", apiCenters)
       
       // Map API response to match our local interface
-      const mappedCenters: DonorBloodTransferCenterSubscriptionDTO[] = apiCenters.map(center => ({
+      const mappedCenters: DonorBloodTransferCenterSubscriptionDTO[] = apiCenters.map((center: { id: any; bloodTansfusionCenterId: any; bloodTansfusionCenter: { id: any; name: any; wilayaId: any; wilaya: { name: any } } }) => ({
         id: center.id,
         bloodTansfusionCenterId: center.bloodTansfusionCenterId,
         bloodTansfusionCenter: center.bloodTansfusionCenter ? {
@@ -156,8 +158,8 @@ export default function NotificationsPage() {
           wilayaId: center.bloodTansfusionCenter.wilayaId,
           // Extract the wilaya name from the WilayaDTO object
           wilaya: center.bloodTansfusionCenter.wilaya?.name || null,
-          // If there's a type property, use it (assuming it exists in the API response)
-          type: center.bloodTansfusionCenter.type || null
+          // Add type property for display
+          type: determineHospitalType(center.bloodTansfusionCenter.name || "")
         } : null
       }))
       
@@ -171,6 +173,32 @@ export default function NotificationsPage() {
       })
     } finally {
       setLoadingCenters(false)
+    }
+  }
+
+  // Add this helper function from the hospital page
+  function determineHospitalType(name: string): "public" | "private" | "clinic" {
+    const lowerName = name.toLowerCase()
+    if (lowerName.includes("chu") || lowerName.includes("public")) {
+      return "public"
+    } else if (lowerName.includes("clinique") || lowerName.includes("privé")) {
+      return "private"
+    } else {
+      return "clinic"
+    }
+  }
+
+  // Add this helper function for badge colors
+  function getTypeBadgeColor(type: string) {
+    switch (type) {
+      case "public":
+        return "bg-trust-blue text-white"
+      case "private":
+        return "bg-hero-red text-white"
+      case "clinic":
+        return "bg-hope-purple text-white"
+      default:
+        return "bg-gray-500 text-white"
     }
   }
 
@@ -196,33 +224,45 @@ export default function NotificationsPage() {
     }))
   }
 
-  const handleUnsubscribeConfirm = async () => {
-    if (hospitalToUnsubscribe && hospitalToUnsubscribe.id) {
-      setIsLoading(true)
-      try {
-        await unsubscribeFromHospital(hospitalToUnsubscribe.id)
-        
-        // Remove from local state
-        setSubscribedCenters(prev => 
-          prev.filter(sub => sub.id !== hospitalToUnsubscribe.id)
-        )
-        
-        toast({
-          title: "Désabonnement confirmé",
-          description: `Vous ne recevrez plus de notifications de ${hospitalToUnsubscribe.name}`,
-          className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
-        })
-      } catch (error) {
-        console.error("Error unsubscribing:", error)
-        toast({
-          title: "Erreur",
-          description: "Une erreur est survenue lors du désabonnement.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-        setHospitalToUnsubscribe(null)
+  // Update the handleUnsubscribeConfirm function to accept parameters directly
+  const handleUnsubscribeConfirm = async (subscriptionId: string, hospitalName: string) => {
+    if (!subscriptionId) {
+      console.error("[NOTIFICATIONS] No subscription ID provided for unsubscribe");
+      return;
+    }
+    
+    setIsLoading(true);
+    console.log(`[NOTIFICATIONS] Starting unsubscribe process for subscription ID: ${subscriptionId}`);
+    
+    try {
+      if (!user?.token) {
+        throw new Error("User token not available");
       }
+      
+      // Make API call to unsubscribe using the subscription ID
+      await unsubscribeFromBloodTansfusionCenter(user.token, subscriptionId);
+      
+      // Update local state to remove the unsubscribed center
+      setSubscribedCenters(prev => prev.filter(sub => sub.id !== subscriptionId));
+      
+      toast({
+        title: "Désabonnement confirmé",
+        description: `Vous ne recevrez plus de notifications de ${hospitalName}`,
+        className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
+      });
+      
+      // Important: Refetch the subscribed centers to ensure data is fresh
+      await fetchSubscribedCenters();
+    } catch (error) {
+      console.error("[NOTIFICATIONS] Error during unsubscribe:", error);
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors du désabonnement.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      setHospitalToUnsubscribe(null);
     }
   }
 
@@ -230,10 +270,10 @@ export default function NotificationsPage() {
     setIsLoading(true)
     try {
       // First update notification preferences
-      await updateNotificationPreferences(notificationSettings)
+      updateNotificationPreferences(notificationSettings)
       
       // Then update privacy and profile settings
-      await updatePrivacySettings(privacySettings)
+      updatePrivacySettings(privacySettings)
       
       // Create profile update data
       const profileUpdateData = {
@@ -360,12 +400,17 @@ export default function NotificationsPage() {
                                     <div className="flex items-center gap-2 mb-1">
                                       <Hospital className="h-4 w-4 text-hero-red" />
                                       <span className="font-medium">{sub.bloodTansfusionCenter?.name}</span>
+                                      {sub.bloodTansfusionCenter?.type && (
+                                        <Badge className={`${getTypeBadgeColor(sub.bloodTansfusionCenter.type)} text-xs`}>
+                                          {sub.bloodTansfusionCenter.type === "public" ? "Public" : 
+                                           sub.bloodTansfusionCenter.type === "private" ? "Privé" : "Centre"}
+                                        </Badge>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2 text-sm text-gray-500">
-                                      <span>{sub.bloodTansfusionCenter?.type}</span>
                                       {sub.bloodTansfusionCenter?.wilaya && (
                                         <>
-                                          <span>•</span>
+                                          <MapPin className="h-3 w-3" />
                                           <span>{sub.bloodTansfusionCenter.wilaya}</span>
                                         </>
                                       )}
@@ -374,19 +419,12 @@ export default function NotificationsPage() {
                                   <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                       <Button
+                                        id={`unsubscribe-btn-${sub.id}`}
                                         variant="outline"
-                                        size="sm"
+                                        size="icon"
                                         className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                                        onClick={() => setHospitalToUnsubscribe({
-                                          id: sub.id || "",
-                                          name: sub.bloodTansfusionCenter?.name || "Centre inconnu",
-                                          type: sub.bloodTansfusionCenter?.type || "Type inconnu",
-                                          wilaya: sub.bloodTansfusionCenter?.wilaya || "Wilaya inconnue",
-                                          urgency: "medium"
-                                        })}
                                       >
-                                        <Trash2 className="h-4 w-4 mr-1" />
-                                        Se désabonner
+                                        <BellOff className="h-4 w-4" />
                                       </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
@@ -397,7 +435,7 @@ export default function NotificationsPage() {
                                         </AlertDialogTitle>
                                         <AlertDialogDescription>
                                           Êtes-vous sûr de vouloir vous désabonner des notifications de{" "}
-                                          <span className="font-semibold">{hospitalToUnsubscribe?.name}</span>?
+                                          <span className="font-semibold">{sub.bloodTansfusionCenter?.name || "ce centre"}</span>?
                                           <br />
                                           <br />
                                           Vous ne recevrez plus de notifications pour les demandes de sang urgentes de ce
@@ -405,11 +443,23 @@ export default function NotificationsPage() {
                                         </AlertDialogDescription>
                                       </AlertDialogHeader>
                                       <AlertDialogFooter>
-                                        <AlertDialogCancel onClick={() => setHospitalToUnsubscribe(null)}>
+                                        <AlertDialogCancel>
                                           Annuler
                                         </AlertDialogCancel>
                                         <AlertDialogAction
-                                          onClick={handleUnsubscribeConfirm}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            
+                                            // Get the BTC ID (not the subscription ID)
+                                            const btcId = sub.bloodTansfusionCenterId || "";
+                                            const hospitalName = sub.bloodTansfusionCenter?.name || "Centre inconnu";
+                                            
+                                            console.log("[NOTIFICATIONS] Confirm button clicked, BTC ID:", btcId);
+                                            
+                                            // Call unsubscribe with the BTC ID
+                                            handleUnsubscribeConfirm(btcId, hospitalName);
+                                          }}
                                           className="bg-red-600 hover:bg-red-700"
                                           disabled={isLoading}
                                         >

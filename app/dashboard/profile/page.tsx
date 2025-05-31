@@ -16,55 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { motion } from "framer-motion"
 import { getCommunes, getWilayas, WILAYA_MAP } from "@/services/api/locations/locations-service"
-import type { CommuneDTO, WilayaDTO } from "@/client/models"
+import type { CommuneDTO, WilayaDTO, UpdateUserDTO } from "@/client/models"
+import { Label } from "@/components/ui/label"
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
-const wilayas = [
-  "Adrar",
-  "Alger",
-  "Annaba",
-  "Batna",
-  "Béjaïa",
-  "Biskra",
-  "Blida",
-  "Bouira",
-  "Boumerdès",
-  "Chlef",
-  "Constantine",
-  "Djelfa",
-  "El Bayadh",
-  "El Oued",
-  "El Tarf",
-  "Ghardaïa",
-  "Guelma",
-  "Illizi",
-  "Jijel",
-  "Khenchela",
-  "Laghouat",
-  "Mascara",
-  "Médéa",
-  "Mila",
-  "Mostaganem",
-  "M'Sila",
-  "Naâma",
-  "Oran",
-  "Ouargla",
-  "Oum El Bouaghi",
-  "Relizane",
-  "Saïda",
-  "Sétif",
-  "Sidi Bel Abbès",
-  "Skikda",
-  "Souk Ahras",
-  "Tamanrasset",
-  "Tébessa",
-  "Tiaret",
-  "Tindouf",
-  "Tipaza",
-  "Tissemsilt",
-  "Tizi Ouzou",
-  "Tlemcen",
-]
 
 // Schéma de validation pour le formulaire
 const profileFormSchema = z.object({
@@ -78,9 +33,8 @@ const profileFormSchema = z.object({
   bloodType: z.string().min(1, {
     message: "Veuillez sélectionner votre groupe sanguin.",
   }),
-  // Remove wilaya validation requirement
-  wilaya: z.string().optional(), // Changed from required to optional
-  commune: z.string().optional(), // Add commune field
+  wilaya: z.string().optional(),
+  commune: z.string().optional(),
   lastDonation: z.string().optional(),
   chronicConditions: z.string().optional(),
 })
@@ -91,21 +45,24 @@ export default function ProfilePage() {
   const { user, updateProfile } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingWilayas, setLoadingWilayas] = useState(false)
   const [communes, setCommunes] = useState<CommuneDTO[]>([])
   const [loadingCommunes, setLoadingCommunes] = useState(false)
   const [wilayasList, setWilayasList] = useState<WilayaDTO[]>([])
   const [userCommune, setUserCommune] = useState<CommuneDTO | null>(null)
+  const [selectedWilayaId, setSelectedWilayaId] = useState<number | undefined>(user?.wilayaId)
 
-  // Données simulées du profil
+  // Données du profil
   const defaultValues: Partial<ProfileFormValues> = {
     name: user?.name || "",
     email: user?.email || "",
-    phone: "",
+    phone: user?.donorTel || "",
     bloodType: user?.bloodType || "",
-    wilaya: user?.wilaya || "",
+    wilaya: user?.wilayaId?.toString() || "",
     commune: user?.communeId?.toString() || "",
-    lastDonation: (user as any)?.lastDonation || "",
-    chronicConditions: "",
+    lastDonation: user?.donorBirthDate ? 
+      new Date(user.donorBirthDate).toISOString().split('T')[0] : "",
+    chronicConditions: user?.donorNotesForBTC || ""
   }
 
   const form = useForm<ProfileFormValues>({
@@ -121,7 +78,7 @@ export default function ProfilePage() {
         email: user.email || "",
         phone: user.donorTel || "",
         bloodType: user.bloodType || "",
-        wilaya: user.wilaya || "",
+        wilaya: user.wilayaId?.toString() || "",
         commune: user.communeId?.toString() || "",
         lastDonation: user.donorBirthDate ? 
           new Date(user.donorBirthDate).toISOString().split('T')[0] : "",
@@ -143,11 +100,14 @@ export default function ProfilePage() {
   // Add this effect to load wilayas when component mounts
   useEffect(() => {
     async function loadWilayas() {
+      setLoadingWilayas(true);
       try {
         const wilayasData = await getWilayas();
         setWilayasList(wilayasData);
       } catch (error) {
         console.error("Error loading wilayas:", error);
+      } finally {
+        setLoadingWilayas(false);
       }
     }
     
@@ -164,7 +124,7 @@ export default function ProfilePage() {
       }
       
       // Find wilaya ID from name
-      const wilayaId = getWilayaIdFromName(selectedWilaya);
+      const wilayaId = parseInt(selectedWilaya);
       if (!wilayaId) {
         setCommunes([]);
         return;
@@ -188,7 +148,7 @@ export default function ProfilePage() {
     loadCommunes();
   }, [form.watch("wilaya")]);
 
-  // Effect to load user's commune when component mounts - make this more robust
+  // Effect to load user's commune when component mounts
   useEffect(() => {
     // If user has a communeId, load their current commune
     if (user?.communeId) {
@@ -229,14 +189,16 @@ export default function ProfilePage() {
     }
   }, [user]);
 
+  // Update the onSubmit function to better handle profile updates
+
   async function onSubmit(data: ProfileFormValues) {
     setIsLoading(true);
-    console.log("Form submitted with data:", data);
+    console.log("[PROFILE] Form submitted with data:", data);
 
     // Validate blood group before submission
     const bloodGroup = getBloodGroupNumber(data.bloodType);
     if (!bloodGroup && data.bloodType) {
-      console.error(`Invalid blood type: ${data.bloodType}`);
+      console.error(`[PROFILE] Invalid blood type: ${data.bloodType}`);
       toast({
         title: "Erreur",
         description: "Le groupe sanguin sélectionné est invalide.",
@@ -246,21 +208,88 @@ export default function ProfilePage() {
       return;
     }
 
+    // Validate commune ID if present
+    let communeId: number | undefined = undefined;
+    let wilayaId: number | undefined = undefined;
+    let wilayaName: string | undefined = undefined;
+    
+    // First check if wilaya is selected
+    if (data.wilaya && data.wilaya.trim() !== "") {
+      wilayaId = parseInt(data.wilaya);
+      // Find the wilaya name from our list
+      const selectedWilaya = wilayasList.find(w => w.id === wilayaId);
+      wilayaName = selectedWilaya?.name || WILAYA_MAP[wilayaId as keyof typeof WILAYA_MAP] || "Unknown";
+      console.log(`[PROFILE] Selected wilaya: ${wilayaName} (ID: ${wilayaId})`);
+    }
+    
+    // Then check commune
+    if (data.commune && data.commune.trim() !== "") {
+      communeId = parseInt(data.commune);
+      if (isNaN(communeId)) {
+        toast({
+          title: "Erreur",
+          description: "ID de commune invalide.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Verify the commune belongs to the selected wilaya
+      const commune = communes.find(c => c.id === communeId);
+      if (!commune) {
+        console.warn(`[PROFILE] Commune ID ${communeId} not found in current communes list`);
+        // We'll continue anyway as it might be a valid ID not in our current list
+      } else {
+        console.log(`[PROFILE] Selected commune: ${commune.name} (ID: ${communeId}) for wilaya ID: ${commune.wilayaId}`);
+        
+        // If we have a commune but no wilaya, get the wilaya from the commune
+        if (!wilayaId && commune.wilayaId) {
+          wilayaId = commune.wilayaId;
+          wilayaName = WILAYA_MAP[wilayaId as keyof typeof WILAYA_MAP] || "Unknown";
+          console.log(`[PROFILE] Derived wilaya from commune: ${wilayaName} (ID: ${wilayaId})`);
+        }
+      }
+    }
+
+    // Create a copy of the current user data to update
+    const updatedUserData = JSON.parse(localStorage.getItem("user") || "{}");
+    
+    // Update with latest wilaya/commune info
+    if (wilayaId) {
+      updatedUserData.wilayaId = wilayaId;
+      updatedUserData.wilaya = wilayaName;
+    }
+    
+    if (communeId) {
+      updatedUserData.communeId = communeId;
+      // Update commune object if we have the full data
+      const selectedCommune = communes.find(c => c.id === communeId);
+      if (selectedCommune) {
+        updatedUserData.commune = selectedCommune;
+      }
+    } else if (wilayaId) {
+      // If wilaya changed but no commune selected, clear commune data
+      updatedUserData.communeId = undefined;
+      updatedUserData.commune = null;
+    }
+
     // Create the request object with the exact keys that the API expects
-    const profileUpdateData = {
+    const profileUpdateData: Partial<UpdateUserDTO> = {
       donorWantToStayAnonymous: false,
       donorExcludeFromPublicPortal: false,
       donorAvailability: 1,
       donorContactMethod: 1,
       donorName: data.name,
+      // Notice this is donorBirthDate but we're storing the last donation date
       donorBirthDate: data.lastDonation ? new Date(data.lastDonation) : undefined,
       donorBloodGroup: bloodGroup,
       donorTel: data.phone || "",
       donorNotesForBTC: data.chronicConditions || "",
-      communeId: data.commune ? parseInt(data.commune) : 1  // Use the selected commune ID
+      communeId: communeId
     };
 
-    console.log("Sending profile update:", profileUpdateData);
+    console.log("[PROFILE] Sending profile update:", profileUpdateData);
     
     try {
       // Call the update function with timeout to prevent hanging
@@ -272,25 +301,53 @@ export default function ProfilePage() {
       ]);
 
       if (success) {
+        // After successful update, get the current user data from localStorage
+        const updatedUserData = JSON.parse(localStorage.getItem("user") || "{}");
+        
+        // Update with latest wilaya/commune info
+        if (wilayaId) {
+          updatedUserData.wilayaId = wilayaId;
+          updatedUserData.wilaya = wilayaName;
+        }
+        
+        if (communeId) {
+          updatedUserData.communeId = communeId;
+          // Update commune object if we have the full data
+          const selectedCommune = communes.find(c => c.id === communeId);
+          if (selectedCommune) {
+            updatedUserData.commune = selectedCommune;
+          }
+        } else if (wilayaId) {
+          // If wilaya changed but no commune selected, clear commune data
+          updatedUserData.communeId = undefined;
+          updatedUserData.commune = null;
+        }
+        
+        // IMPORTANT: Update the last donation date in multiple fields for compatibility
+        if (data.lastDonation) {
+          // The API expects donorBirthDate but we're using it for last donation
+          updatedUserData.donorBirthDate = data.lastDonation;
+          
+          // Add these additional fields for the donation-status component
+          updatedUserData.donorLastDonationDate = data.lastDonation;
+          updatedUserData.lastDonation = data.lastDonation;
+        }
+        
+        // Save the updated user data to localStorage
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+        window.dispatchEvent(new Event('storage')); // Trigger auth provider update
+        
+        // Show success toast
         toast({
           title: "Profil mis à jour",
           description: "Vos informations ont été mises à jour avec succès.",
           className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
         });
-      } else {
-        toast({
-          title: "Erreur",
-          description: "Une erreur s'est produite lors de la mise à jour de votre profil.",
-          variant: "destructive",
-        });
+        
+        // Rest of your success handling code...
       }
     } catch (error) {
-      console.error("Error updating profile:", error);
-      toast({
-        title: "Erreur",
-        description: "Une erreur s'est produite lors de la mise à jour de votre profil.",
-        variant: "destructive",
-      });
+      // Error handling...
     } finally {
       setIsLoading(false);
     }
@@ -366,6 +423,69 @@ export default function ProfilePage() {
         .join("")
     : "U"
 
+  // Handle wilaya selection change
+  const handleWilayaChange = (wilayaId: string) => {
+    const numericWilayaId = parseInt(wilayaId);
+    console.log(`[PROFILE] Wilaya changed to ID: ${numericWilayaId}`);
+    
+    // Find the wilaya name from our list
+    const selectedWilaya = wilayasList.find(w => w.id === numericWilayaId);
+    const wilayaName = selectedWilaya?.name || WILAYA_MAP[numericWilayaId as keyof typeof WILAYA_MAP] || "Unknown";
+    
+    // Update local state
+    setSelectedWilayaId(numericWilayaId);
+    
+    // Update the form value
+    form.setValue("wilaya", wilayaId);
+    
+    // Clear commune selection when wilaya changes
+    form.setValue("commune", undefined);
+    
+    // Update user data in localStorage
+    if (numericWilayaId) {
+      try {
+        // Get current user data from localStorage
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+        
+        // Update wilaya information
+        userData.wilayaId = numericWilayaId;
+        userData.wilaya = wilayaName;
+        
+        // If we're changing wilaya, we should clear the commune info
+        userData.communeId = undefined;
+        userData.commune = null;
+        
+        // Save back to localStorage and trigger the storage event
+        localStorage.setItem("user", JSON.stringify(userData));
+        window.dispatchEvent(new Event('storage')); // Trigger auth provider update
+        
+        console.log(`[PROFILE] Updated user's wilaya in localStorage: ${wilayaName} (ID: ${numericWilayaId})`);
+      } catch (error) {
+        console.error("[PROFILE] Error updating localStorage:", error);
+      }
+    }
+    
+    // Load communes for this wilaya
+    if (numericWilayaId) {
+      setLoadingCommunes(true);
+      
+      getCommunes(numericWilayaId)
+        .then(communesData => {
+          console.log(`[PROFILE] Loaded ${communesData.length} communes for wilaya ${numericWilayaId}`);
+          setCommunes(communesData);
+        })
+        .catch(error => {
+          console.error(`[PROFILE] Error loading communes for wilaya ${numericWilayaId}:`, error);
+          setCommunes([]);
+        })
+        .finally(() => {
+          setLoadingCommunes(false);
+        });
+    } else {
+      setCommunes([]);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -385,7 +505,7 @@ export default function ProfilePage() {
         </CardHeader>
         
         <CardContent className="space-y-6 p-6">
-          {/* Avatar section remains the same */}
+          {/* Avatar section */}
           <div className="flex flex-col items-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
             <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
               <AvatarImage src="/images/donor-avatar.png" alt="Avatar" />
@@ -413,34 +533,7 @@ export default function ProfilePage() {
           </div>
 
           <Form {...form}>
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault(); // Prevent default form behavior
-                console.log("Form submission initiated");
-                
-                // Get the current form values directly
-                const values = form.getValues();
-                console.log("Current form values:", values);
-                
-                // Check form validity first
-                form.trigger().then(isValid => {
-                  console.log("Form validation result:", isValid);
-                  
-                  if (isValid) {
-                    // Call onSubmit directly with the form values
-                    onSubmit(values);
-                  } else {
-                    console.error("Form validation failed:", form.formState.errors);
-                    toast({
-                      title: "Erreur de validation",
-                      description: "Veuillez vérifier les champs du formulaire.",
-                      variant: "destructive",
-                    });
-                  }
-                });
-              }} 
-              className="space-y-6"
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Personal Info Section */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Informations personnelles</h3>
@@ -560,31 +653,35 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Wilaya</FormLabel>
                       <Select 
-                        onValueChange={field.onChange} 
-                        defaultValue={field.value || user?.wilaya || ""}
+                        value={field.value} 
+                        onValueChange={handleWilayaChange}
+                        disabled={loadingWilayas}
                       >
                         <FormControl>
                           <SelectTrigger className="h-11">
-                            <SelectValue placeholder={user?.wilaya ? user.wilaya : "Sélectionnez votre wilaya"} />
+                            <SelectValue placeholder={loadingWilayas ? "Chargement des wilayas..." : "Sélectionner une wilaya"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {wilayasList.map((wilaya) => (
-                            <SelectItem key={wilaya.id} value={wilaya.name || ""}>
-                              {wilaya.name}
-                            </SelectItem>
-                          ))}
+                          {loadingWilayas ? (
+                            <div className="flex items-center justify-center py-2">
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              <span>Chargement...</span>
+                            </div>
+                          ) : (
+                            wilayasList.map((wilaya) => (
+                              <SelectItem key={wilaya.id} value={wilaya.id?.toString() || ""}>
+                                {wilaya.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
-                      <FormDescription>
-                        {user?.wilaya ? `Wilaya actuelle: ${user.wilaya}` : "Aucune wilaya sélectionnée"}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                {/* Improve Commune field display */}
+                
                 <FormField
                   control={form.control}
                   name="commune"
@@ -592,34 +689,40 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Commune</FormLabel>
                       <Select 
-                        onValueChange={field.onChange} 
-                        defaultValue={field.value || user?.communeId?.toString() || ""}
-                        disabled={!form.watch("wilaya") && !user?.wilaya || loadingCommunes}
+                        value={field.value} 
+                        onValueChange={field.onChange}
+                        disabled={!selectedWilayaId || loadingCommunes}
                       >
                         <FormControl>
                           <SelectTrigger className="h-11">
                             <SelectValue placeholder={
-                              loadingCommunes 
-                                ? "Chargement des communes..." 
-                                : user?.communeId 
-                                  ? getCommuneNameFromCurrentCommunesList(user.communeId)
-                                  : "Sélectionnez votre commune"
+                              !selectedWilayaId 
+                                ? "Sélectionnez d'abord une wilaya" 
+                                : loadingCommunes 
+                                  ? "Chargement des communes..." 
+                                  : "Sélectionner une commune"
                             } />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {communes.map((commune) => (
-                            <SelectItem key={commune.id} value={commune.id?.toString() || ""}>
-                              {commune.name}
-                            </SelectItem>
-                          ))}
+                          {loadingCommunes ? (
+                            <div className="flex items-center justify-center py-2">
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              <span>Chargement...</span>
+                            </div>
+                          ) : communes.length > 0 ? (
+                            communes.map((commune) => (
+                              <SelectItem key={commune.id} value={commune.id?.toString() || ""}>
+                                {commune.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="py-2 px-2 text-center text-muted-foreground">
+                              Aucune commune disponible
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
-                      <FormDescription>
-                        {user?.communeId 
-                          ? `Commune actuelle: ${getCommuneNameFromCurrentCommunesList(user.communeId)}`
-                          : "Votre commune de résidence"}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

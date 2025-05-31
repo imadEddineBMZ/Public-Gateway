@@ -29,6 +29,8 @@ import {
   PaginationPrevious 
 } from "@/components/ui/pagination"
 import {getBloodTansfusionCentersDirectAuthenticated} from "@/services/api/bloodDonation/blood-transfusion-service"
+import { AuthRequiredDialog } from "@/components/auth-required-dialog"
+
 // Types pour les hôpitaux
 type Hospital = {
   id: string
@@ -55,6 +57,7 @@ export default function HospitalsPage() {
   const [wilayas, setWilayas] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [subscribedCenters, setSubscribedCenters] = useState<{id: string, bloodTansfusionCenterId: string}[]>([])
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -174,11 +177,8 @@ export default function HospitalsPage() {
 
   const handleSubscriptionToggle = async (hospitalId: string, currentSubscriptionId: string | null) => {
     if (!user) {
-      toast({
-        title: "Non connecté",
-        description: "Vous devez être connecté pour gérer vos abonnements.",
-        variant: "destructive",
-      });
+      // Show the auth required dialog instead of just a toast
+      setShowAuthDialog(true);
       return;
     }
     
@@ -565,6 +565,15 @@ export default function HospitalsPage() {
           )}
         </motion.div>
       </main>
+
+      {/* Auth Required Dialog */}
+      <AuthRequiredDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        title="Connexion requise"
+        description="Vous devez être connecté pour vous abonner aux notifications d'un hôpital. Connectez-vous ou créez un compte pour continuer."
+        action="subscribe"
+      />
     </div>
   )
 }

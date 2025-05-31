@@ -22,6 +22,7 @@ import { useAuth } from "@/components/auth-provider"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { AuthRequiredDialog } from "@/components/auth-required-dialog"
 
 // Blood Group Mapping
 const BLOOD_GROUP_MAP = {
@@ -76,6 +77,7 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const [isInterested, setIsInterested] = useState(false)
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
 
   // Get blood type from numeric code
   const bloodGroupText = BLOOD_GROUP_MAP[request.bloodGroup as keyof typeof BLOOD_GROUP_MAP] || request.bloodType;
@@ -138,14 +140,11 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
 
   const handlePledge = () => {
     if (!user) {
-      toast({
-        title: "Connexion requise",
-        description: "Vous devez créer un compte pour vous engager à donner du sang.",
-        className: "bg-gradient-to-r from-blue-50 to-white border-l-4 border-trust-blue",
-      })
-      return
+      // Show the auth required dialog instead of just a toast
+      setShowAuthDialog(true);
+      return;
     }
-
+    
     router.push(`/dashboard/pledges/new?requestId=${request.id}`)
   }
 
@@ -306,6 +305,15 @@ export function BloodRequestCard({ request }: BloodRequestCardProps) {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Auth Required Dialog */}
+      <AuthRequiredDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        title="Connexion requise"
+        description="Vous devez être connecté pour vous engager à donner du sang. Connectez-vous ou créez un compte pour continuer."
+        action="pledge"
+      />
     </motion.div>
   )
 }

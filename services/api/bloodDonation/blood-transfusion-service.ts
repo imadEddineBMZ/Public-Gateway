@@ -162,18 +162,18 @@ export async function subscribeToBloodTansfusionCenter(token: string, bloodTansf
 /**
  * Unsubscribe from a blood transfusion center
  * @param token JWT authentication token
- * @param subscriptionId ID of the subscription to delete
+ * @param btcId ID of the blood transfusion center to unsubscribe from
  * @returns A boolean indicating success
  */
-export async function unsubscribeFromBloodTansfusionCenter(token: string, subscriptionId: string): Promise<boolean> {
+export async function unsubscribeFromBloodTansfusionCenter(token: string, btcId: string): Promise<boolean> {
   try {
-    console.log(`[BTC SERVICE] Unsubscribing from subscription ID: ${subscriptionId}`);
+    console.log(`[BTC SERVICE] Unsubscribing from blood transfusion center ID: ${btcId}`);
     
     // Clean token if it has Bearer prefix
     const cleanToken = token.startsWith('Bearer ') ? token.substring(7) : token;
     
     // Use direct fetch for better error handling
-    const response = await fetch(`${API_BASE_URL}/Subscriptions/btc/${subscriptionId}`, {
+    const response = await fetch(`${API_BASE_URL}/Subscriptions/btc/${btcId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${cleanToken}`,
@@ -199,7 +199,7 @@ export async function unsubscribeFromBloodTansfusionCenter(token: string, subscr
       throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
     }
     
-    console.log(`[BTC SERVICE] Successfully unsubscribed from ${subscriptionId}`);
+    console.log(`[BTC SERVICE] Successfully unsubscribed from BTC ID: ${btcId}`);
     return true;
   } catch (error) {
     console.error('[BTC SERVICE] Error unsubscribing from blood transfusion center:', error);
@@ -210,13 +210,50 @@ export async function unsubscribeFromBloodTansfusionCenter(token: string, subscr
 /**
  * Get blood transfusion centers the user is subscribed to
  */
-export async function getSubscribedBloodTansfusionCenters(token: string) {
+export async function getSubscribedBloodTansfusionCenters(token: string, level: number = 1, paginationTake: number = 50) {
   try {
     const client = createAuthenticatedClient(token);
-    const response = await client.bTC.subscribed.get();
+    const response = await client.bTC.subscribed.get({
+      queryParameters: {
+        level: level,
+        paginationTake: paginationTake
+      }
+    });
     return response?.btCsubscribed || [];
   } catch (error) {
-    console.error('Error fetching subscribed blood transfusion centers:', error);
+    console.error('[BTC SERVICE] Error fetching subscribed BTC centers with client:', error);
+    // Fall back to direct fetch implementation
+    return getSubscribedBloodTansfusionCentersDirect(token, level, paginationTake);
+  }
+}
+
+/**
+ * Direct fetch fallback for subscribed blood transfusion centers
+ */
+export async function getSubscribedBloodTansfusionCentersDirect(token: string, level: number = 1, paginationTake: number = 50) {
+  try {
+    console.log(`[BTC SERVICE] Attempting direct fetch for subscribed centers with level: ${level}`);
+    
+    // Clean token if it has Bearer prefix
+    const cleanToken = token.startsWith('Bearer ') ? token.substring(7) : token;
+    
+    const response = await fetch(`https://localhost:57679/BTC/subscribed?&level=${level}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${cleanToken}`,
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('[BTC SERVICE] Direct fetch for subscribed centers successful:', data);
+    return data.btCsubscribed || [];
+  } catch (error) {
+    console.error('[BTC SERVICE] Error in direct fetch for subscribed centers:', error);
     return [];
   }
 }

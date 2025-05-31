@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { ApplicationUserDTO, UpdateProfileRequest, UpdateUserDTO } from "@/client/models";
 import { createAuthenticatedClient } from "@/services/api/core";
+import { register as apiRegister } from "@/services/api/auth/auth-service";
+import { getWilayas } from "@/services/api/locations/locations-service";
+import Cookies from "js-cookie";
 
 // Add these types first to make TypeScript happy
 type NotificationSettings = {
@@ -26,22 +29,28 @@ type User = {
   email: string;
   token: string;
   bloodType?: string;
-  wilaya?: string;
-  
-  // Donor specific fields
-  donorCorrelationId?: string;
-  donorWantToStayAnonymous?: boolean;
-  donorExcludeFromPublicPortal?: boolean;
-  donorAvailability?: number;
-  donorContactMethod?: number;
-  donorName?: string;
-  donorBirthDate?: string;
   donorBloodGroup?: number;
-  donorNIN?: string;
-  donorTel?: string;
-  donorNotesForBTC?: string;
-  donorLastDonationDate?: string;
-  communeId?: number;
+  wilaya?: string;
+  wilayaId?: number;
+  commune?: {
+    id: number;
+    name: string;
+    wilayaId: number;
+  } | null;
+  communeId?: number | null;
+
+  // Donor specific fields
+  donorCorrelationId?: string | null;
+  donorWantToStayAnonymous?: boolean | null;
+  donorExcludeFromPublicPortal?: boolean | null;
+  donorAvailability?: number | null;
+  donorContactMethod?: number | null;
+  donorName?: string | null;
+  donorBirthDate?: string | null;
+  donorNIN?: string | null;
+  donorTel?: string | null;
+  donorNotesForBTC?: string | null;
+  donorLastDonationDate?: string | null;
 
   // Add proper typing for these notification-related fields
   notificationPreferences?: NotificationSettings;
@@ -59,6 +68,10 @@ type AuthContextType = {
   updatePrivacySettings: (settings: PrivacySettings) => void;
   unsubscribeFromHospital: (hospitalId: string) => void;
   updateProfile: (profileData: Partial<UpdateUserDTO>) => Promise<boolean>;
+  // Add the register method
+  register: (userData: any) => Promise<void>;
+  // Add the login method
+  login: (email: string, password: string) => Promise<boolean>;
 };
 
 // Make sure the context default value has these methods
@@ -73,6 +86,10 @@ const AuthContext = createContext<AuthContextType>({
   updatePrivacySettings: () => {},
   unsubscribeFromHospital: () => {},
   updateProfile: async () => false,
+  // Add default implementation
+  register: async () => {},
+  // Add default implementation for login
+  login: async () => false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -105,64 +122,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== 'undefined') {
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        } else {
-          // Only set demo user if no real user exists in localStorage
-          // DEMO USER CODE - FOR DEVELOPMENT ONLY
-          const userData = {
-            donorCorrelationId: null,
-            donorWantToStayAnonymous: false,
-            donorExcludeFromPublicPortal: false,
-            donorAvailability: 1,
-            donorContactMethod: 1,
-            donorName: "Hiki Belamdi",
-            donorBirthDate: "2023-02-02T00:00:00Z",
-            donorBloodGroup: 1,
-            donorNIN: "125555879123412345",
-            donorTel: "0778332551",
-            donorNotesForBTC: "",
-            donorLastDonationDate: null,
-            communeId: 555
-          };
+          const parsedUser = JSON.parse(storedUser);
           
-          // Create the complete user object
-          const completeUser: User = {
-            id: "userId",
-            name: userData.donorName || "Utilisateur",
-            email: "hikihiki@example.com",
-            token: "token",
-            bloodType: userData.donorBloodGroup 
-              ? mapBloodGroupToString(userData.donorBloodGroup) 
-              : undefined,
-            donorBloodGroup: userData.donorBloodGroup,
-            wilaya: undefined,
-            donorCorrelationId: userData.donorCorrelationId || undefined,
-            donorWantToStayAnonymous: userData.donorWantToStayAnonymous || false,
-            donorExcludeFromPublicPortal: userData.donorExcludeFromPublicPortal || false,
-            donorAvailability: userData.donorAvailability,
-            donorContactMethod: userData.donorContactMethod,
-            donorName: userData.donorName,
-            donorBirthDate: userData.donorBirthDate,
-            donorNIN: userData.donorNIN,
-            donorTel: userData.donorTel,
-            donorNotesForBTC: userData.donorNotesForBTC,
-            donorLastDonationDate: userData.donorLastDonationDate || undefined,
-            communeId: userData.communeId,
-            notificationPreferences: {
-              enableNotifications: true,
-              emailNotifications: true,
-              smsNotifications: true,
-              subscribedHospitals: []
-            },
-            privacySettings: {
-              showOnPublicList: true,
-              isAnonymous: false
-            }
-          };
-          
-          // Update state and localStorage
-          setUser(completeUser);
-          localStorage.setItem("user", JSON.stringify(completeUser));
+          // If we have communeId and wilayaId but no wilaya name, fetch it
+          if (parsedUser.commune?.wilayaId && !parsedUser.wilaya) {
+            (async () => {
+              const wilayaName = await fetchWilayaName(parsedUser.commune.wilayaId);
+              parsedUser.wilaya = wilayaName;
+              localStorage.setItem("user", JSON.stringify(parsedUser));
+              setUser(parsedUser);
+            })();
+          } else {
+            setUser(parsedUser);
+          }
         }
       }
     } catch (e) {
@@ -170,9 +142,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem("user");
       }
-    } finally {
-      setIsLoading(false);
     }
+    
+    setIsLoading(false);
   }, []); // Empty dependency array means this runs once on mount
 
   // Function to fetch complete user data from API
@@ -275,7 +247,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         sessionStorage.removeItem("user");
         sessionStorage.removeItem("token");
         
-        console.log("[AUTH] Local storage cleared");
+        // Also remove the auth cookie
+        Cookies.remove('auth_token');
+        
+        console.log("[AUTH] Local storage and cookies cleared");
         
         // Show success toast
         toast({
@@ -406,42 +381,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Even without response data, we should update our user state
       if (response.ok) {
-        // Create a copy of the current user object
+        // Update user data with the new profile data
         const updatedUser = { ...user! };
         
-        // Update only the fields that were in the profileData
+        // Update fields from profile data
         Object.keys(profileData).forEach(key => {
-          // Use type assertion to safely update fields
           (updatedUser as any)[key] = profileData[key as keyof typeof profileData] ?? (updatedUser as any)[key];
         });
         
-        // Explicitly handle communeId to ensure it's always included
-        if ('communeId' in profileData) {
-          updatedUser.communeId = profileData.communeId ?? user!.communeId;
-          console.log("[AUTH] Explicitly updated communeId:", updatedUser.communeId);
-        }
-        
-        // Update derived fields
-        if (profileData.donorBloodGroup) {
-          updatedUser.bloodType = mapBloodGroupToString(profileData.donorBloodGroup);
-        }
-        
-        console.log("[AUTH] Updated user object with communeId:", updatedUser.communeId);
-        
-        // Update state
-        setUser(updatedUser);
-        
-        // Update localStorage
-        if (typeof window !== 'undefined') {
+        // If communeId is updated, also update wilayaId
+        if ('communeId' in profileData && profileData.communeId) {
+          // Fetch commune to get wilayaId
           try {
-            localStorage.setItem("user", JSON.stringify(updatedUser));
-            // Add debugging to verify localStorage contains communeId
-            const stored = JSON.parse(localStorage.getItem("user") || "{}");
-            console.log("[AUTH] Verified communeId in localStorage:", stored.communeId);
-          } catch (e) {
-            console.error("[AUTH] Error saving to localStorage:", e);
+            const communeResponse = await fetch(`https://localhost:57679/communes/details/${profileData.communeId}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${user!.token}`,
+                'Accept': 'application/json',
+              }
+            });
+            
+            if (communeResponse.ok) {
+              const communeData = await communeResponse.json();
+              if (communeData && communeData.wilayaId) {
+                updatedUser.wilayaId = communeData.wilayaId;
+                
+                // Get wilaya name
+                const wilayaName = await fetchWilayaName(communeData.wilayaId);
+                updatedUser.wilaya = wilayaName;
+              }
+            }
+          } catch (error) {
+            console.error("[AUTH] Error fetching commune details:", error);
           }
         }
+        
+        // Update state and localStorage
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
         
         return true;
       }
@@ -453,7 +430,375 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Update the provider value to include the new methods
+  // Add the register function
+  const register = async (userData: any) => {
+    try {
+      console.log("[AUTH] Starting registration with data:", userData);
+      
+      // Call the API register function
+      await apiRegister(userData);
+      
+      // Show success message
+      toast({
+        title: "Inscription réussie",
+        description: "Votre compte a été créé avec succès. Vous pouvez maintenant vous connecter.",
+        className: "bg-gradient-to-r from-green-50 to-white border-l-4 border-life-green",
+      });
+      
+      // Redirect to login page
+      router.push('/login');
+    } catch (error) {
+      console.error("[AUTH] Registration error:", error);
+      throw error;
+    }
+  };
+
+  // Replace the login function with this implementation
+
+  const login = async (email: string, password: string) => {
+    try {
+      console.log("[AUTH] Attempting login with:", email);
+      
+      // Make the login API call
+      const response = await fetch("https://localhost:57679/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("[AUTH] Login response data:", data);
+      
+      if (data.jwToken) {
+        // Store initial basic user data with token
+        const initialUserData = {
+          id: data.userId,
+          name: data.userDTO?.name || email.split('@')[0],
+          email: email,
+          token: data.jwToken,
+          donorNIN: data.userDTO?.donorNIN || null
+        };
+        
+        console.log("[AUTH] Initial user data saved:", initialUserData);
+        
+        // Temporarily store in localStorage (will be replaced with complete data)
+        localStorage.setItem("user", JSON.stringify(initialUserData));
+        
+        // Also set a cookie with the token
+        Cookies.set('auth_token', data.jwToken, { 
+          expires: 7, 
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict'
+        });
+        
+        // Now fetch all users to find the complete user data
+        console.log("[AUTH] Fetching users to find complete user data");
+        const usersResponse = await fetch(`https://localhost:57679/users?loggedUserId=${initialUserData.id}&level=1`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${data.jwToken}`,
+            "Accept": "application/json"
+          }
+        });
+        
+        if (!usersResponse.ok) {
+          throw new Error(`Failed to fetch users: ${usersResponse.status}`);
+        }
+        
+        const usersData = await usersResponse.json();
+        console.log("[AUTH] Received users data, searching for match");
+        
+        let matchedUser = null;
+        
+        // First try to match by NIN if available
+        if (data.userDTO?.donorNIN) {
+          matchedUser = usersData.users.find(
+            (user: any) => user.donorNIN === data.userDTO.donorNIN
+          );
+          
+          if (matchedUser) {
+            console.log("[AUTH] Found exact NIN match:", matchedUser.donorNIN);
+          }
+        }
+        
+        // If no match by NIN, try other identifiers as fallback
+        if (!matchedUser) {
+          matchedUser = usersData.users.find(
+            (user: any) => 
+              user.id === data.userId || 
+              user.email === email
+          );
+          
+          if (matchedUser) {
+            console.log("[AUTH] Found user match by ID/email");
+          }
+        }
+        
+        // If still no match, use the first user as last resort
+        if (!matchedUser && usersData.users.length > 0) {
+          console.warn("[AUTH] Couldn't find exact match, using first user");
+          matchedUser = usersData.users[0];
+        }
+        
+        if (matchedUser) {
+          // Extract the wilaya name and ID if available
+          let wilayaName = "Unknown";
+          let wilayaId = undefined;
+          
+          if (matchedUser.commune?.wilayaId) {
+            wilayaId = matchedUser.commune.wilayaId;
+            wilayaName = await fetchWilayaName(wilayaId);
+            console.log(`[AUTH] Found wilayaId: ${wilayaId}, name: ${wilayaName}`);
+          }
+          
+          // Create the complete user object with all available data
+          const completeUser = {
+            id: data.userId,
+            // Always use donorName as the primary source for name if available
+            name: matchedUser.donorName || data.userDTO?.name || email.split('@')[0],
+            email: email,
+            token: data.jwToken,
+            donorBloodGroup: matchedUser.donorBloodGroup,
+            bloodType: matchedUser.donorBloodGroup ? 
+              mapBloodGroupToString(matchedUser.donorBloodGroup) : undefined,
+            
+            // Location data
+            wilayaId: wilayaId,
+            wilaya: wilayaName,
+            communeId: matchedUser.communeId,
+            commune: matchedUser.commune,
+            
+            // Donor specific fields
+            donorCorrelationId: matchedUser.donorCorrelationId,
+            donorName: matchedUser.donorName, // This should match the name field above
+            donorBirthDate: matchedUser.donorBirthDate,
+            donorNIN: matchedUser.donorNIN,
+            donorTel: matchedUser.donorTel,
+            donorWantToStayAnonymous: matchedUser.donorWantToStayAnonymous,
+            donorExcludeFromPublicPortal: matchedUser.donorExcludeFromPublicPortal,
+            donorAvailability: matchedUser.donorAvailability,
+            donorContactMethod: matchedUser.donorContactMethod,
+            donorNotesForBTC: matchedUser.donorNotesForBTC,
+            donorLastDonationDate: matchedUser.donorLastDonationDate,
+            
+            // Default notification preferences
+            notificationPreferences: {
+              enableNotifications: true,
+              emailNotifications: true,
+              smsNotifications: true,
+              subscribedHospitals: []
+            },
+            privacySettings: {
+              showOnPublicList: !matchedUser.donorExcludeFromPublicPortal,
+              isAnonymous: matchedUser.donorWantToStayAnonymous
+            }
+          };
+          
+          // Log the complete user data
+          console.log("[AUTH] Complete user data collected:", completeUser);
+          
+          // Save to localStorage and state
+          localStorage.setItem("user", JSON.stringify(completeUser));
+          setUser(completeUser);
+          
+          return true;
+        } else {
+          console.error("[AUTH] No matching user found in users list");
+          return false;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("[AUTH] Login error:", error);
+      toast({
+        title: "Erreur de connexion",
+        description: "Identifiants invalides ou erreur de serveur. Veuillez réessayer.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  // Update the fetchCompleteUserData function
+
+  const fetchCompleteUserData = async (token: string) => {
+    try {
+      console.log("[AUTH] Fetching complete user data");
+      
+      // Get current user from localStorage
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const userId = currentUser.id;
+      
+      // Log the user ID for debugging
+      console.log("[AUTH] User ID being used for data fetch:", userId);
+      
+      if (!userId) {
+        console.error("[AUTH] No user ID available for fetching data");
+        return;
+      }
+      
+      // Add loggedUserId parameter to the API call
+      const response = await fetch(`https://localhost:57679/users?loggedUserId=${userId}&level=1`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user data: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("[AUTH] Received users data:", data);
+      
+      if (data && data.users && data.users.length > 0) {
+        // Look for user by NIN first - PRIORITIZE THIS as requested
+        let userData = null;
+        
+        // Even if currentUser.donorNIN doesn't exist yet, check all users
+        // Check through all users first for NIN match
+        for (const user of data.users) {
+          // If we have a donorNIN to match against, prioritize that
+          if (currentUser.donorNIN && user.donorNIN === currentUser.donorNIN) {
+            userData = user;
+            console.log("[AUTH] Found exact NIN match:", user.donorNIN);
+            break;
+          }
+        }
+        
+        // If no match by NIN, try other identifiers as fallback
+        if (!userData) {
+          for (const user of data.users) {
+            if (user.id === userId || 
+                user.email === currentUser.email || 
+                user.donorCorrelationId === userId) {
+              userData = user;
+              console.log("[AUTH] Found user match by ID/email:", user);
+              break;
+            }
+          }
+        }
+        
+        // If no match found, try commune matching as fallback
+        if (!userData && currentUser.communeId) {
+          userData = data.users.find((user: { communeId: any; }) => user.communeId === currentUser.communeId);
+          if (userData) {
+            console.log("[AUTH] Found user by commune match:", userData);
+          }
+        }
+        
+        // If still not found, use first user as last resort
+        if (!userData) {
+          console.warn("[AUTH] Couldn't find exact user match, using first user");
+          userData = data.users[0];
+        }
+        
+        if (userData) {
+          // Extract the wilaya name from the wilayaId if commune exists
+          let wilayaName = "Unknown";
+          let wilayaId = undefined;
+          
+          // Log the commune data to help debug
+          console.log("[AUTH] User commune data:", userData.commune);
+          
+          if (userData.commune?.wilayaId) {
+            wilayaId = userData.commune.wilayaId;
+            console.log(`[AUTH] Found wilayaId: ${wilayaId}, fetching name`);
+            
+            try {
+              wilayaName = await fetchWilayaName(wilayaId);
+              console.log(`[AUTH] Found wilaya name: ${wilayaName}`);
+            } catch (error) {
+              console.error(`[AUTH] Error fetching wilaya name:`, error);
+              // Set a fallback name based on ID
+              wilayaName = `Wilaya ${wilayaId}`;
+            }
+          } else if (userData.communeId) {
+            // If we have communeId but no wilaya info, try to fetch it directly
+            console.log(`[AUTH] No wilayaId in commune object, trying to fetch for communeId: ${userData.communeId}`);
+            try {
+              const communeResponse = await fetch(`https://localhost:57679/communes/details/${userData.communeId}`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Accept': 'application/json',
+                }
+              });
+              
+              if (communeResponse.ok) {
+                const communeData = await communeResponse.json();
+                if (communeData && communeData.wilayaId) {
+                  wilayaId = communeData.wilayaId;
+                  wilayaName = await fetchWilayaName(wilayaId);
+                  console.log(`[AUTH] Found wilayaId ${wilayaId} with name ${wilayaName} from commune details`);
+                }
+              }
+            } catch (error) {
+              console.error("[AUTH] Error fetching commune details:", error);
+            }
+          }
+          
+          const completeUser = {
+            ...currentUser,
+            // Add all the fields from the API response
+            donorCorrelationId: userData.donorCorrelationId,
+            donorName: userData.donorName,
+            donorBirthDate: userData.donorBirthDate,
+            donorBloodGroup: userData.donorBloodGroup,
+            donorNIN: userData.donorNIN,
+            donorTel: userData.donorTel,
+            donorWantToStayAnonymous: userData.donorWantToStayAnonymous,
+            donorExcludeFromPublicPortal: userData.donorExcludeFromPublicPortal,
+            donorAvailability: userData.donorAvailability,
+            donorContactMethod: userData.donorContactMethod,
+            donorNotesForBTC: userData.donorNotesForBTC,
+            donorLastDonationDate: userData.donorLastDonationDate,
+            communeId: userData.communeId,
+            commune: userData.commune,
+            wilayaId: wilayaId, // Store the wilayaId explicitly
+            wilaya: wilayaName  // Set the wilaya name directly
+          };
+          
+          // Update localStorage with complete user data
+          localStorage.setItem("user", JSON.stringify(completeUser));
+          
+          // Update state
+          setUser(completeUser);
+          
+          console.log(`[AUTH] User data updated with wilayaId: ${wilayaId}, wilaya: ${wilayaName}`);
+        }
+      }
+    } catch (error) {
+      console.error("[AUTH] Error fetching complete user data:", error);
+    }
+  };
+
+  // Add this function to fetch wilaya name
+
+  const fetchWilayaName = async (wilayaId: number): Promise<string> => {
+    try {
+      // Use direct fetch or the existing getWilayas function
+      const wilayasData = await getWilayas();
+      
+      // Find the wilaya with the matching ID
+      const wilaya = wilayasData.find(w => w.id === wilayaId);
+      return wilaya?.name || "Unknown";
+    } catch (error) {
+      console.error(`[AUTH] Error fetching wilaya name for ID ${wilayaId}:`, error);
+      return "Unknown";
+    }
+  };
+
+  // Update the provider value to include the register method
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -464,7 +809,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       updateNotificationPreferences,
       updatePrivacySettings,
       unsubscribeFromHospital,
-      updateProfile
+      updateProfile,
+      register,  // Add the register method here
+      login  // Add the login method here
     }}>
       {children}
     </AuthContext.Provider>
