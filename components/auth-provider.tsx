@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
-import { ApplicationUserDTO } from "@/client/models";
+import { ApplicationUserDTO, UpdateProfileRequest, UpdateUserDTO } from "@/client/models";
 import { createAuthenticatedClient } from "@/services/api/core";
 
 // Add these types first to make TypeScript happy
@@ -58,6 +58,7 @@ type AuthContextType = {
   updateNotificationPreferences: (preferences: NotificationSettings) => void;
   updatePrivacySettings: (settings: PrivacySettings) => void;
   unsubscribeFromHospital: (hospitalId: string) => void;
+  updateProfile: (profileData: Partial<UpdateUserDTO>) => Promise<boolean>;
 };
 
 // Make sure the context default value has these methods
@@ -71,6 +72,7 @@ const AuthContext = createContext<AuthContextType>({
   updateNotificationPreferences: () => {},
   updatePrivacySettings: () => {},
   unsubscribeFromHospital: () => {},
+  updateProfile: async () => false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -81,14 +83,104 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Helper function to map numeric blood group to string
+  const mapBloodGroupToString = (bloodGroupId: number): string => {
+    const BLOOD_GROUP_MAP: Record<number, string> = {
+      1: "AB+",
+      2: "AB-",
+      3: "A+",
+      4: "A-",
+      5: "B+",
+      6: "B-",
+      7: "O+",
+      8: "O-"
+    };
+    return BLOOD_GROUP_MAP[bloodGroupId] || "Inconnu";
+  };
+
+  // Check for stored user data on component mount
+  useEffect(() => {
+    try {
+      // Only access localStorage on the client side
+      if (typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        } else {
+          // Only set demo user if no real user exists in localStorage
+          // DEMO USER CODE - FOR DEVELOPMENT ONLY
+          const userData = {
+            donorCorrelationId: null,
+            donorWantToStayAnonymous: false,
+            donorExcludeFromPublicPortal: false,
+            donorAvailability: 1,
+            donorContactMethod: 1,
+            donorName: "Hiki Belamdi",
+            donorBirthDate: "2023-02-02T00:00:00Z",
+            donorBloodGroup: 1,
+            donorNIN: "125555879123412345",
+            donorTel: "0778332551",
+            donorNotesForBTC: "",
+            donorLastDonationDate: null,
+            communeId: 555
+          };
+          
+          // Create the complete user object
+          const completeUser: User = {
+            id: "userId",
+            name: userData.donorName || "Utilisateur",
+            email: "hikihiki@example.com",
+            token: "token",
+            bloodType: userData.donorBloodGroup 
+              ? mapBloodGroupToString(userData.donorBloodGroup) 
+              : undefined,
+            donorBloodGroup: userData.donorBloodGroup,
+            wilaya: undefined,
+            donorCorrelationId: userData.donorCorrelationId || undefined,
+            donorWantToStayAnonymous: userData.donorWantToStayAnonymous || false,
+            donorExcludeFromPublicPortal: userData.donorExcludeFromPublicPortal || false,
+            donorAvailability: userData.donorAvailability,
+            donorContactMethod: userData.donorContactMethod,
+            donorName: userData.donorName,
+            donorBirthDate: userData.donorBirthDate,
+            donorNIN: userData.donorNIN,
+            donorTel: userData.donorTel,
+            donorNotesForBTC: userData.donorNotesForBTC,
+            donorLastDonationDate: userData.donorLastDonationDate || undefined,
+            communeId: userData.communeId,
+            notificationPreferences: {
+              enableNotifications: true,
+              emailNotifications: true,
+              smsNotifications: true,
+              subscribedHospitals: []
+            },
+            privacySettings: {
+              showOnPublicList: true,
+              isAnonymous: false
+            }
+          };
+          
+          // Update state and localStorage
+          setUser(completeUser);
+          localStorage.setItem("user", JSON.stringify(completeUser));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse stored user data", e);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("user");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // Empty dependency array means this runs once on mount
+
   // Function to fetch complete user data from API
   const fetchUserData = async (userId: string, token: string) => {
-    console.log(`[AUTH] Starting fetchUserData for userId: ${userId}`);
     try {
       // Create authenticated client with the token
       const client = createAuthenticatedClient(token);
       
-      console.log(`[AUTH] Fetching user data from /user endpoint with userId: ${userId}`);
       // Fetch user data from API
       const response = await client.user.get({
         queryParameters: {
@@ -96,13 +188,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       });
       
-      console.log(`[AUTH] User data response received:`, response);
-      
       if (response?.user) {
         // Explicitly type the user data from response
         const userData: ApplicationUserDTO = response.user;
-        
-        console.log(`[AUTH] Processing user data:`, userData);
         
         // Use donorCorrelationId as the primary ID when available
         const primaryId = userData.donorCorrelationId || userId;
@@ -122,7 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             : undefined,
           donorBloodGroup: userData.donorBloodGroup || undefined,
 
-          wilaya: userData.wilaya?.name,
+          wilaya: undefined, // userData doesn't have wilaya property
 
           // Map all donor fields from the API response
           donorCorrelationId: userData.donorCorrelationId || undefined,
@@ -149,17 +237,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         };
         
-        console.log(`[AUTH] User data processing complete. Updated user object:`, completeUser);
-        
         // Update state and localStorage
         setUser(completeUser);
         
         if (typeof window !== 'undefined') {
-          console.log(`[AUTH] Storing user data in localStorage`);
           localStorage.setItem("user", JSON.stringify(completeUser));
         }
-        
-        console.log(`[AUTH] fetchUserData completed successfully`);
       } else {
         console.log(`[AUTH] No user data found in the response`);
       }
@@ -172,41 +255,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
     }
   };
-
-  // Helper function to map numeric blood group to string
-  const mapBloodGroupToString = (bloodGroupId: number): string => {
-    const BLOOD_GROUP_MAP: Record<number, string> = {
-      1: "AB+",
-      2: "AB-",
-      3: "A+",
-      4: "A-",
-      5: "B+",
-      6: "B-",
-      7: "O+",
-      8: "O-"
-    };
-    return BLOOD_GROUP_MAP[bloodGroupId] || "Inconnu";
-  };
-
-  // Check for stored user data on component mount
-  useEffect(() => {
-    try {
-      // Only access localStorage on the client side
-      if (typeof window !== 'undefined') {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      }
-    } catch (e) {
-      console.error("Failed to parse stored user data", e);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem("user");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   // Enhanced logout function with logging
   const logout = () => {
@@ -311,6 +359,100 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log(`Unsubscribing from hospital ${hospitalId}`);
   };
 
+  /**
+   * Updates the donor profile using the API
+   * @param profileData Object containing profile data to update
+   * @returns Promise that resolves when the profile is updated
+   */
+  const updateProfile = async (profileData: Partial<UpdateUserDTO>): Promise<boolean> => {
+    if (!user?.token) {
+      console.error("[AUTH] No user token available for profile update");
+      return false;
+    }
+
+    try {
+      console.log("[AUTH] Starting profile update with data:", profileData);
+      
+      // Use fetch directly for better debugging
+      const response = await fetch(`https://localhost:57679/donor/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData),
+      });
+      
+      console.log("[AUTH] Profile update HTTP status:", response.status);
+      
+      // Read the response text for debugging
+      const responseText = await response.text();
+      console.log("[AUTH] Raw response:", responseText);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}, Response: ${responseText}`);
+      }
+      
+      // Parse the response if not empty
+      let responseData;
+      try {
+        if (responseText) {
+          responseData = JSON.parse(responseText);
+          console.log("[AUTH] Parsed response data:", responseData);
+        }
+      } catch (e) {
+        console.warn("[AUTH] Could not parse response as JSON:", e);
+      }
+      
+      // Even without response data, we should update our user state
+      if (response.ok) {
+        // Create a copy of the current user object
+        const updatedUser = { ...user! };
+        
+        // Update only the fields that were in the profileData
+        Object.keys(profileData).forEach(key => {
+          // Use type assertion to safely update fields
+          (updatedUser as any)[key] = profileData[key as keyof typeof profileData] ?? (updatedUser as any)[key];
+        });
+        
+        // Explicitly handle communeId to ensure it's always included
+        if ('communeId' in profileData) {
+          updatedUser.communeId = profileData.communeId ?? user!.communeId;
+          console.log("[AUTH] Explicitly updated communeId:", updatedUser.communeId);
+        }
+        
+        // Update derived fields
+        if (profileData.donorBloodGroup) {
+          updatedUser.bloodType = mapBloodGroupToString(profileData.donorBloodGroup);
+        }
+        
+        console.log("[AUTH] Updated user object with communeId:", updatedUser.communeId);
+        
+        // Update state
+        setUser(updatedUser);
+        
+        // Update localStorage
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem("user", JSON.stringify(updatedUser));
+            // Add debugging to verify localStorage contains communeId
+            const stored = JSON.parse(localStorage.getItem("user") || "{}");
+            console.log("[AUTH] Verified communeId in localStorage:", stored.communeId);
+          } catch (e) {
+            console.error("[AUTH] Error saving to localStorage:", e);
+          }
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("[AUTH] Error updating profile:", error);
+      return false;
+    }
+  };
+
   // Update the provider value to include the new methods
   return (
     <AuthContext.Provider value={{ 
@@ -321,7 +463,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       fetchUserData,
       updateNotificationPreferences,
       updatePrivacySettings,
-      unsubscribeFromHospital
+      unsubscribeFromHospital,
+      updateProfile
     }}>
       {children}
     </AuthContext.Provider>

@@ -45,7 +45,7 @@ export default function LoginPage() {
         token,
         bloodType,
         
-        // Include all donor fields directly from the API response
+        // Add all the donor-specific fields
         donorCorrelationId: userData?.donorCorrelationId,
         donorWantToStayAnonymous: userData?.donorWantToStayAnonymous || false,
         donorExcludeFromPublicPortal: userData?.donorExcludeFromPublicPortal || false,
@@ -59,6 +59,21 @@ export default function LoginPage() {
         donorNotesForBTC: userData?.donorNotesForBTC,
         donorLastDonationDate: userData?.donorLastDonationDate,
         communeId: userData?.communeId,
+        
+        // Add default notification and privacy settings
+        notificationPreferences: {
+          enableNotifications: true,
+          emailNotifications: true,
+          smsNotifications: true,
+          subscribedHospitals: []
+        },
+        privacySettings: {
+          showOnPublicList: !userData?.donorExcludeFromPublicPortal,
+          isAnonymous: userData?.donorWantToStayAnonymous || false
+        },
+        
+        // Add wilaya information if available
+        wilaya: userData?.wilaya?.name,
       }
       
       // Update user context
