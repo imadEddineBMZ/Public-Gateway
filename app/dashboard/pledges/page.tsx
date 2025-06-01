@@ -388,7 +388,7 @@ export default function PledgesPage() {
             <Card>
               <CardContent className="pt-6 pb-6 text-center">
                 <p className="text-gray-500 mb-4">Vous n'avez pas d'engagements actifs.</p>
-                <Link href="/dashboard/requests">
+                <Link href="/requests">
                   <Button className="bg-hero-red hover:bg-hero-red/90 text-white">Parcourir les demandes</Button>
                 </Link>
               </CardContent>
