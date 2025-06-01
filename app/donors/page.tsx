@@ -97,9 +97,8 @@ export default function DonorsPage() {
             
             return {
               id: stableId,
-              name: donor.firstName && donor.lastName 
-                ? `${donor.firstName} ${donor.lastName}`
-                : donor.username || "Donneur anonyme",
+              // FIX: Use donorName instead of firstName/lastName
+              name: donor.donorName || donor.username || "Donneur anonyme",
               bloodType: bloodGroupString,
               wilaya: donor.wilaya?.name || "Non spécifiée",
               lastDonation: donor.donorLastDonationDate || null,
@@ -109,12 +108,14 @@ export default function DonorsPage() {
               avatar: donor.profilePictureUrl || undefined,
               contactInfo: {
                 email: donor.email || "",
-                phone: donor.donorTel || "", // Changed from phoneNumber to donorTel
-                contactMethod: donor.donorContactMethod || null,
+                phone: donor.donorTel || "",
+                // Use nullish coalescing instead of logical OR to handle 0 value correctly
+                contactMethod: donor.donorContactMethod ?? null,
               },
               privacySettings: {
-                isAnonymous: donor.donorWantToStayAnonymous || false,
-                showOnPublicList: !donor.donorExcludedFromPublicPortal,
+                // FIX: Handle null values correctly with nullish coalescing
+                isAnonymous: donor.donorWantToStayAnonymous ?? false,
+                showOnPublicList: !(donor.donorExcludeFromPublicPortal ?? false),
               },
             };
           })
@@ -421,21 +422,43 @@ export default function DonorsPage() {
                               </div>
 
                               {/* Display contact method preference for authenticated users */}
-                              {user && donor.contactInfo.contactMethod && (
+                              {user && (
                                 <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                                   {donor.contactInfo.contactMethod === 1 ? (
-                                    <PhoneCall className="h-3.5 w-3.5 text-blue-500" />
+                                    <>
+                                      <PhoneCall className="h-3.5 w-3.5 text-blue-500" />
+                                      <span className="text-xs font-medium">
+                                        Préfère: Appel téléphonique
+                                      </span>
+                                    </>
                                   ) : donor.contactInfo.contactMethod === 2 ? (
-                                    <MessageSquare className="h-3.5 w-3.5 text-green-500" />
+                                    <>
+                                      <MessageSquare className="h-3.5 w-3.5 text-green-500" />
+                                      <span className="text-xs font-medium">
+                                        Préfère: Message texte
+                                      </span>
+                                    </>
+                                  ) : donor.contactInfo.contactMethod === 3 ? (
+                                    <>
+                                      <div className="flex">
+                                        <PhoneCall className="h-3.5 w-3.5 text-purple-500 mr-1" />
+                                        <MessageSquare className="h-3.5 w-3.5 text-purple-500" />
+                                      </div>
+                                      <span className="text-xs font-medium">
+                                        Préfère: Les deux méthodes
+                                      </span>
+                                    </>
                                   ) : (
-                                    <div className="flex">
-                                      <PhoneCall className="h-3.5 w-3.5 text-purple-500 mr-1" />
-                                      <MessageSquare className="h-3.5 w-3.5 text-purple-500" />
-                                    </div>
+                                    <>
+                                      <div className="flex">
+                                        <PhoneCall className="h-3.5 w-3.5 text-gray-400 mr-1" />
+                                        <MessageSquare className="h-3.5 w-3.5 text-gray-400" />
+                                      </div>
+                                      <span className="text-xs font-medium text-gray-500">
+                                        Préférence non spécifiée
+                                      </span>
+                                    </>
                                   )}
-                                  <span className="text-xs font-medium">
-                                    Préfère: {CONTACT_METHOD_MAP[donor.contactInfo.contactMethod as keyof typeof CONTACT_METHOD_MAP] || "Non spécifié"}
-                                  </span>
                                 </div>
                               )}
                               
